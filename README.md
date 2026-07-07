@@ -82,7 +82,7 @@ ssh debian@192.168.x.x 'sudo k3s kubectl apply -f -' < demo/resources/bad-privil
 Минимальные требования для комфортного запуска стенда:
 
 - 2 vCPU;
-- 4 GB RAM;
+- 8 GB RAM;
 - 15 GB disk minimum, 25-30 GB recommended for a comfortable margin;
 - доступ в интернет с VM;
 - SSH-доступ с машины, где запускается Ansible;

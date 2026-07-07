@@ -5,7 +5,7 @@
 Минимальные требования:
 
 - 2 vCPU;
-- 4 GB RAM;
+- 8 GB RAM;
 - 15 GB disk minimum, 25-30 GB recommended for a comfortable margin;
 - доступ в интернет с VM;
 - SSH-доступ с машины, где запускается Ansible;
@@ -74,15 +74,28 @@ cloud-localds seed.iso user-data meta-data
 
 Если `cloud-localds` не установлен, для Debian/Ubuntu он находится в пакете `cloud-image-utils`.
 
+Альтернативный вариант, если на hypervisor нет `cloud-localds`, но есть `genisoimage` или `mkisofs`:
+
+```bash
+genisoimage \
+  -output seed.iso \
+  -volid cidata \
+  -joliet \
+  -rock \
+  user-data \
+  meta-data
+```
+
 Запустить VM через libvirt. Для homelab использовался bridge `br0`; если у вас другая сеть, замените `--network bridge=br0,model=virtio` на свой вариант:
 
 ```bash
 virt-install \
   --name kyverno-mvp \
-  --memory 4096 \
-  --vcpus 2 \
+  --memory 8192 \
+  --vcpus 4 \
   --import \
   --os-variant debian13 \
+  --boot uefi \
   --disk path=kyverno-mvp.qcow2,format=qcow2,bus=virtio \
   --disk path=seed.iso,device=cdrom \
   --network bridge=br0,model=virtio \
@@ -122,7 +135,7 @@ cloud-localds seed.iso user-data meta-data
 В VirtualBox:
 
 - создать Linux VM: Debian 64-bit;
-- выделить 2 vCPU, 4 GB RAM;
+- выделить минимум 2 vCPU и 8 GB RAM;
 - подключить `kyverno-mvp.vdi` как основной диск;
 - подключить `seed.iso` как optical drive;
 - выбрать сетевой режим `Bridged Adapter`, чтобы VM получила IP из той же сети, где находится машина с Ansible;
