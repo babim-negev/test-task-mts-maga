@@ -413,6 +413,12 @@ cr.yandex/mirror/library/redis:8.2.3-alpine
 https://mirror.yandex.ru/helm/kyverno.github.io
 ```
 
+Для kube-prometheus-stack используется зеркало Prometheus Community на Яндексе:
+
+```text
+https://mirror.yandex.ru/helm/prometheus-community.github.io
+```
+
 Policy Reporter использует официальный upstream Helm repository:
 
 ```text
