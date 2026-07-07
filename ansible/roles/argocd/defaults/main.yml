@@ -3,6 +3,9 @@ argocd_version: "v3.4.4"
 argocd_namespace: argocd
 argocd_install_manifest_url: "https://raw.githubusercontent.com/argoproj/argo-cd/{{ argocd_version }}/manifests/install.yaml"
 argocd_install_manifest_path: "/tmp/argocd-install-{{ argocd_version }}.yaml"
+argocd_install_manifest_timeout: 60
+argocd_install_manifest_retries: 5
+argocd_install_manifest_delay: 10
 argocd_apply_timeout: "360s"
 argocd_rollout_timeout: "600s"
 argocd_force_apply: false

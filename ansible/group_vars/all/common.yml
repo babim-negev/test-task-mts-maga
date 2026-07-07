@@ -4,11 +4,9 @@
 
 use_russian_mirrors: true
 
-# Optional mirror Redis image для Argo CD.
-# Оставьте пустым, чтобы использовать image из официального manifest.
-# Пример для своего Yandex Container Registry, если upstream registry недоступен:
-# argocd_redis_image_override: "cr.yandex/<registry-id>/redis:8.2.3-alpine"
-argocd_redis_image_override: ""
+# Argo CD upstream manifest может ссылаться на public.ecr.aws Redis image,
+# который в некоторых сетях нестабилен из-за CloudFront timeout.
+argocd_redis_image_override: "docker.io/library/redis:8.2.3-alpine"
 
 # Первый UI публикуется через HTTPRoute Envoy Gateway.
 argocd_server_insecure: true

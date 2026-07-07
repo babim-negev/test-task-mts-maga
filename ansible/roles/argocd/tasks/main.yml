@@ -36,6 +36,11 @@
     group: root
     mode: "0644"
     force: true
+    timeout: "{{ argocd_install_manifest_timeout }}"
+  register: argocd_install_manifest_download
+  retries: "{{ argocd_install_manifest_retries }}"
+  delay: "{{ argocd_install_manifest_delay }}"
+  until: argocd_install_manifest_download is succeeded
   when: argocd_install_check.rc != 0 or argocd_force_apply | bool
 
 - name: Заменить Redis image в manifest Argo CD до применения
