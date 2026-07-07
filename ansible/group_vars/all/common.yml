@@ -4,9 +4,9 @@
 
 use_russian_mirrors: true
 
-# Argo CD upstream manifest может ссылаться на public.ecr.aws Redis image,
-# который в некоторых сетях нестабилен из-за CloudFront timeout.
-argocd_redis_image_override: "docker.io/library/redis:8.2.3-alpine"
+# Argo CD upstream manifest ссылается на public.ecr.aws Redis image.
+# Для российского стенда по умолчанию используем Yandex mirror.
+argocd_redis_image_override: "cr.yandex/mirror/library/redis:8.2.3-alpine"
 
 # Первый UI публикуется через HTTPRoute Envoy Gateway.
 argocd_server_insecure: true

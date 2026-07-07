@@ -9,7 +9,7 @@ argocd_install_manifest_delay: 10
 argocd_apply_timeout: "360s"
 argocd_rollout_timeout: "600s"
 argocd_force_apply: false
-argocd_redis_image_override: ""
+argocd_redis_image_override: "cr.yandex/mirror/library/redis:8.2.3-alpine"
 argocd_redis_upstream_registry_parts:
   - public
   - ecr

@@ -137,14 +137,6 @@ python -m pip install ansible
 ansible-galaxy collection install -r ansible/requirements.yml
 ```
 
-Сейчас `ansible/requirements.yml` пустой, поэтому команда может вывести:
-
-```text
-Skipping install, no requirements found
-```
-
-Это нормально: текущие роли используют только builtin-модули Ansible.
-
 Если вы уже находитесь внутри каталога `ansible/`, используйте путь без дополнительного префикса:
 
 ```bash
@@ -312,10 +304,10 @@ Argo CD устанавливается из официального manifest:
 https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.4/manifests/install.yaml
 ```
 
-По умолчанию роль использует Redis image из официального manifest Argo CD. Если upstream registry недоступен в вашей сети, можно указать mirror в `ansible/group_vars/all/common.yml`:
+По умолчанию роль заменяет Redis image из официального manifest Argo CD на Yandex mirror, чтобы стенд не зависел от `public.ecr.aws`:
 
 ```yaml
-argocd_redis_image_override: "cr.yandex/<registry-id>/redis:8.2.3-alpine"
+argocd_redis_image_override: "cr.yandex/mirror/library/redis:8.2.3-alpine"
 ```
 
 Если нужно принудительно переехать на новую версию Argo CD или повторно применить официальный manifest, выставьте `argocd_force_apply: true`.
@@ -409,7 +401,11 @@ ansible/roles/*/defaults/main.yml
 https://mirror.yandex.ru/helm/
 ```
 
-Container registry proxy `https://huecker.io/` зафиксирован как optional fallback, но не как обязательная зависимость.
+Для Redis image Argo CD используется Yandex mirror:
+
+```text
+cr.yandex/mirror/library/redis:8.2.3-alpine
+```
 
 Для Kyverno chart проверено рабочее зеркало Яндекса:
 
@@ -641,5 +637,3 @@ rm -f files/context/config.yaml
 - путь до приватного ключа;
 - что пользователь может выполнять `sudo`;
 - что VM доступна по сети с локальной машины.
-
-Если `ansible-galaxy collection install -r ansible/requirements.yml` пишет `Skipping install, no requirements found`, это нормально для текущего состояния проекта.

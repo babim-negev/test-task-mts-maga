@@ -22,7 +22,7 @@ argocd_namespace: argocd
 argocd_apply_timeout: "360s"
 argocd_rollout_timeout: "600s"
 argocd_force_apply: false
-argocd_redis_image_override: ""
+argocd_redis_image_override: "cr.yandex/mirror/library/redis:8.2.3-alpine"
 argocd_server_insecure: true
 argocd_apply_root_application: "{{ argocd_root_application_repo_url | length > 0 }}"
 argocd_root_application_name: root
@@ -35,10 +35,10 @@ argocd_root_application_path: gitops/apps
 
 - создает namespace `argocd`, если он отсутствует;
 - скачивает install manifest Argo CD в локальный файл на VM;
-- если задан `argocd_redis_image_override`, заменяет Redis image в manifest до применения;
-- если задан `argocd_redis_image_override`, проверяет, что подготовленный manifest не использует upstream Redis registry;
+- заменяет Redis image из upstream manifest на `argocd_redis_image_override` до применения;
+- проверяет, что подготовленный manifest не использует upstream Redis registry;
 - применяет подготовленный install manifest Argo CD, если Argo CD еще не установлен;
-- если задан `argocd_redis_image_override`, закрепляет Redis image на этом значении;
+- закрепляет Redis image на значении `argocd_redis_image_override`;
 - включает `server.insecure=true`, чтобы Argo CD UI можно было публиковать через HTTP Gateway;
 - ждет rollout всех deployments;
 - ждет rollout всех statefulsets;

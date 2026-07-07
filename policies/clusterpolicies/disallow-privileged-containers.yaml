@@ -6,6 +6,7 @@ metadata:
     policies.kyverno.io/title: Disallow Privileged Containers
     policies.kyverno.io/category: Pod Security
     policies.kyverno.io/severity: high
+    pod-policies.kyverno.io/autogen-controllers: none
 spec:
   validationFailureAction: Enforce
   background: true
@@ -16,6 +17,16 @@ spec:
           - resources:
               kinds:
                 - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - argocd
+                - kyverno
+                - monitoring
+                - envoy-gateway-system
+                - policy-reporter
       validate:
         message: "Containers must not run in privileged mode."
         pattern:
@@ -29,4 +40,3 @@ spec:
             =(ephemeralContainers):
               - =(securityContext):
                   =(privileged): false
-

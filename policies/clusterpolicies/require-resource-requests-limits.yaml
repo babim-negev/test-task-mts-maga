@@ -6,6 +6,7 @@ metadata:
     policies.kyverno.io/title: Require Resource Requests And Limits
     policies.kyverno.io/category: Reliability
     policies.kyverno.io/severity: medium
+    pod-policies.kyverno.io/autogen-controllers: none
 spec:
   validationFailureAction: Enforce
   background: true
@@ -16,6 +17,16 @@ spec:
           - resources:
               kinds:
                 - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - argocd
+                - kyverno
+                - monitoring
+                - envoy-gateway-system
+                - policy-reporter
       validate:
         message: "Every container must define cpu/memory requests and limits."
         pattern:
@@ -28,4 +39,3 @@ spec:
                   limits:
                     cpu: "?*"
                     memory: "?*"
-
