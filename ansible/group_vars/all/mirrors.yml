@@ -1,0 +1,25 @@
+---
+# Централизованные источники загрузки для Helm charts.
+# Это общие настройки стенда, поэтому они лежат в group_vars/all.
+
+helm_use_russian_mirrors: true
+
+helm_repositories:
+  argoproj:
+    upstream_url: https://argoproj.github.io/argo-helm
+    mirror_url: https://mirror.yandex.ru/helm/argoproj.github.io/argo-helm
+  grafana:
+    upstream_url: https://grafana.github.io/helm-charts
+    mirror_url: https://mirror.yandex.ru/helm/grafana.github.io/helm-charts
+  kyverno:
+    upstream_url: https://kyverno.github.io/kyverno
+    mirror_url: https://mirror.yandex.ru/helm/kyverno.github.io
+  policy-reporter:
+    upstream_url: https://kyverno.github.io/policy-reporter
+    mirror_url: ""
+  prometheus-community:
+    upstream_url: https://prometheus-community.github.io/helm-charts
+    mirror_url: ""
+  kubernetes-sigs:
+    upstream_url: https://kubernetes-sigs.github.io/gateway-api
+    mirror_url: https://mirror.yandex.ru/helm/kubernetes-sigs.github.io/gateway-api

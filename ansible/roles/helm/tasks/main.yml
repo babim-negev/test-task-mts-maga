@@ -1,0 +1,57 @@
+---
+- name: Проверить наличие закрепленного Helm binary
+  ansible.builtin.stat:
+    path: "{{ helm_binary_versioned_path }}"
+  register: helm_binary_stat
+
+- name: Скачать закрепленный архив Helm
+  ansible.builtin.get_url:
+    url: "{{ helm_archive_url }}"
+    dest: "{{ helm_archive_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    force: "{{ helm_force_download }}"
+  when: not helm_binary_stat.stat.exists or helm_force_download | bool
+
+- name: Создать временную директорию для распаковки Helm
+  ansible.builtin.file:
+    path: "{{ helm_extract_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: not helm_binary_stat.stat.exists or helm_force_download | bool
+
+- name: Распаковать закрепленный архив Helm
+  ansible.builtin.unarchive:
+    src: "{{ helm_archive_path }}"
+    dest: "{{ helm_extract_dir }}"
+    remote_src: true
+  when: not helm_binary_stat.stat.exists or helm_force_download | bool
+
+- name: Установить закрепленный Helm binary
+  ansible.builtin.copy:
+    src: "{{ helm_extract_dir }}/{{ helm_os }}-{{ helm_arch }}/helm"
+    dest: "{{ helm_binary_versioned_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  when: not helm_binary_stat.stat.exists or helm_force_download | bool
+
+- name: Направить символьную ссылку helm на закрепленную версию
+  ansible.builtin.file:
+    src: "{{ helm_binary_versioned_path }}"
+    dest: "{{ helm_binary_path }}"
+    state: link
+    force: true
+
+- name: Проверить установленную версию Helm
+  ansible.builtin.command: "{{ helm_binary_path }} version --short"
+  register: helm_version_check
+  changed_when: false
+
+- name: Вывести версию Helm
+  ansible.builtin.debug:
+    var: helm_version_check.stdout

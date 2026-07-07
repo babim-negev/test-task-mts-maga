@@ -1,0 +1,8 @@
+.DS_Store
+.venv/
+ansible/.venv/
+ansible/inventory.ini
+files/context/
+Тестовые задачи_по SRE.pdf
+*.retry
+tmp/

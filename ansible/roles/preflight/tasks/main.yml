@@ -1,0 +1,54 @@
+---
+- name: Проверить, что семейство ОС относится к Debian
+  ansible.builtin.fail:
+    msg: >-
+      Неподдерживаемое семейство ОС '{{ ansible_facts["os_family"] }}'.
+      Этот стенд поддерживает только Debian/Ubuntu.
+  when: ansible_facts["os_family"] != "Debian"
+
+- name: Проверить, что дистрибутив Debian или Ubuntu
+  ansible.builtin.fail:
+    msg: >-
+      Неподдерживаемый дистрибутив '{{ ansible_facts["distribution"] }}'.
+      Используйте чистую Debian или Ubuntu VM.
+  when: ansible_facts["distribution"] not in ["Debian", "Ubuntu"]
+
+- name: Проверить наличие sudo
+  ansible.builtin.command: which sudo
+  changed_when: false
+
+- name: Проверить минимальный объем RAM
+  ansible.builtin.fail:
+    msg: >-
+      Недостаточно RAM: найдено {{ ansible_facts["memtotal_mb"] }} MB,
+      требуется минимум {{ min_ram_mb }} MB.
+  when: ansible_facts["memtotal_mb"] | int < min_ram_mb | int
+
+- name: Проверить минимальное количество CPU
+  ansible.builtin.fail:
+    msg: >-
+      Недостаточно CPU cores: найдено {{ ansible_facts["processor_vcpus"] | default(ansible_facts["processor_count"]) }},
+      требуется минимум {{ min_cpu_count }}.
+  when: (ansible_facts["processor_vcpus"] | default(ansible_facts["processor_count"]) | int) < (min_cpu_count | int)
+
+- name: Найти параметры корневой точки монтирования
+  ansible.builtin.set_fact:
+    preflight_root_mount: "{{ ansible_facts['mounts'] | selectattr('mount', 'equalto', '/') | first }}"
+
+- name: Проверить минимальный размер корневого диска
+  ansible.builtin.fail:
+    msg: >-
+      Недостаточно места на корневом диске: найдено {{ (preflight_root_mount.size_total / 1024 / 1024 / 1024) | round(1) }} GB,
+      требуется минимум {{ min_disk_gb }} GB.
+  when: (preflight_root_mount.size_total | int) < (min_disk_gb | int * 1024 * 1024 * 1024)
+
+- name: Проверить повышение привилегий
+  ansible.builtin.command: id -u
+  become: true
+  changed_when: false
+  register: preflight_become_check
+
+- name: Завершить playbook, если повышение привилегий не стало root
+  ansible.builtin.fail:
+    msg: "Повышение привилегий не сработало: ожидался uid 0, получен {{ preflight_become_check.stdout }}."
+  when: preflight_become_check.stdout != "0"

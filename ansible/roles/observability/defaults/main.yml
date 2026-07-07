@@ -1,0 +1,44 @@
+---
+observability_namespace: monitoring
+observability_release_name: monitoring
+observability_chart_name: kube-prometheus-stack
+observability_chart_version: "87.10.1"
+observability_chart_repo_key: prometheus-community
+observability_chart_repo_url: "{{ helm_repositories[observability_chart_repo_key].mirror_url if (helm_use_russian_mirrors | bool and helm_repositories[observability_chart_repo_key].mirror_url | length > 0) else helm_repositories[observability_chart_repo_key].upstream_url }}"
+observability_values_path: /tmp/kyverno-mvp-kube-prometheus-stack-values.yaml
+observability_route_path: /tmp/kyverno-mvp-grafana-route.yaml
+observability_install_timeout: "15m"
+observability_wait_timeout: "600s"
+
+observability_grafana_hostname: grafana.kyverno-mvp.local
+observability_grafana_route_name: grafana
+observability_grafana_service_name: monitoring-grafana
+observability_grafana_gui_service_name: grafana-gui
+observability_grafana_service_port: 80
+observability_grafana_admin_user: admin
+observability_grafana_admin_password: admin
+observability_grafana_anonymous_enabled: true
+observability_grafana_anonymous_org_name: Main Org.
+observability_grafana_anonymous_org_role: Viewer
+observability_grafana_disable_login_form: true
+observability_grafana_viewers_can_edit: false
+
+observability_prometheus_retention: 6h
+observability_prometheus_retention_size: 1GB
+observability_prometheus_replicas: 1
+observability_prometheus_gui_service_name: prometheus-gui
+observability_prometheus_gui_service_port: 9090
+observability_prometheus_requests_cpu: 100m
+observability_prometheus_requests_memory: 512Mi
+observability_prometheus_limits_cpu: 500m
+observability_prometheus_limits_memory: 1Gi
+
+observability_grafana_requests_cpu: 50m
+observability_grafana_requests_memory: 128Mi
+observability_grafana_limits_cpu: 250m
+observability_grafana_limits_memory: 256Mi
+
+observability_operator_requests_cpu: 50m
+observability_operator_requests_memory: 128Mi
+observability_operator_limits_cpu: 250m
+observability_operator_limits_memory: 256Mi

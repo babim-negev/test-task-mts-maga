@@ -1,0 +1,11 @@
+---
+- name: Перечитать systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Перезапустить k3s
+  ansible.builtin.systemd:
+    name: k3s
+    state: restarted
+    daemon_reload: true
+  when: k3s_service_state == "started"

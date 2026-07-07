@@ -1,0 +1,21 @@
+---
+# Общие настройки стенда для любой целевой Debian/Ubuntu VM.
+# Ролевые значения по умолчанию лежат в ansible/roles/*/defaults/main.yml.
+
+use_russian_mirrors: true
+
+# Optional mirror Redis image для Argo CD.
+# Оставьте пустым, чтобы использовать image из официального manifest.
+# Пример для своего Yandex Container Registry, если upstream registry недоступен:
+# argocd_redis_image_override: "cr.yandex/<registry-id>/redis:8.2.3-alpine"
+argocd_redis_image_override: ""
+
+# Первый UI публикуется через HTTPRoute Envoy Gateway.
+argocd_server_insecure: true
+
+# Grafana публикуется через Envoy Gateway.
+observability_grafana_hostname: grafana.kyverno-mvp.local
+
+# Root Application для App of Apps по умолчанию смотрит в опубликованный GitHub repository.
+# Для fork или private mirror переопределите argocd_root_application_repo_url в inventory/group_vars/extra-vars.
+argocd_root_application_path: gitops/apps

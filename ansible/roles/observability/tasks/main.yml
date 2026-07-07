@@ -1,0 +1,98 @@
+---
+- name: Сформировать values kube-prometheus-stack
+  ansible.builtin.template:
+    src: kube-prometheus-stack-values.yaml.j2
+    dest: "{{ observability_values_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Установить kube-prometheus-stack
+  ansible.builtin.command: >-
+    {{ helm_binary_path }} upgrade --install {{ observability_release_name }}
+    {{ observability_chart_name }}
+    --repo {{ observability_chart_repo_url }}
+    --version {{ observability_chart_version }}
+    --namespace {{ observability_namespace }}
+    --create-namespace
+    --values {{ observability_values_path }}
+    --wait
+    --timeout {{ observability_install_timeout }}
+  environment:
+    KUBECONFIG: "{{ k3s_kubeconfig_path }}"
+  register: observability_helm_install
+  changed_when: observability_helm_install.stdout is search("has been installed|has been upgraded")
+
+- name: Дождаться готовности Grafana deployment
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ observability_namespace }}
+    rollout status deployment/{{ observability_grafana_service_name }}
+    --timeout={{ observability_wait_timeout }}
+  changed_when: false
+
+- name: Дождаться готовности Prometheus Operator deployment
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ observability_namespace }}
+    rollout status deployment/{{ observability_release_name }}-operator
+    --timeout={{ observability_wait_timeout }}
+  changed_when: false
+
+- name: Дождаться готовности Prometheus statefulset
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ observability_namespace }}
+    rollout status statefulset/prometheus-{{ observability_release_name }}-prometheus
+    --timeout={{ observability_wait_timeout }}
+  changed_when: false
+
+- name: Сформировать HTTPRoute для Grafana
+  ansible.builtin.template:
+    src: grafana-route.yaml.j2
+    dest: "{{ observability_route_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Применить HTTPRoute для Grafana
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    apply
+    -f {{ observability_route_path }}
+  register: observability_grafana_route_apply
+  changed_when: observability_grafana_route_apply.stdout is search("created|configured")
+
+- name: Дождаться принятия HTTPRoute для Grafana
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ observability_namespace }}
+    get httproute {{ observability_grafana_route_name }}
+    -o jsonpath='{.status.parents[0].conditions[?(@.type=="Accepted")].status}'
+  register: observability_grafana_route_accepted
+  changed_when: false
+  retries: 60
+  delay: 5
+  until: observability_grafana_route_accepted.stdout == "True"
+
+- name: Получить статус observability pods
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ observability_namespace }}
+    get pods -o wide
+  register: observability_pods
+  changed_when: false
+
+- name: Вывести статус observability pods
+  ansible.builtin.debug:
+    var: observability_pods.stdout_lines
+
+- name: Сообщить hostname Grafana
+  ansible.builtin.debug:
+    msg: "Grafana будет доступна через Envoy Gateway по http://{{ observability_grafana_hostname }} после добавления VM IP в /etc/hosts. Для просмотра включен anonymous Viewer без права редактирования."

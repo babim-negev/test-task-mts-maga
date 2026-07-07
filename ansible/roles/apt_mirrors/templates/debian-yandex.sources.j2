@@ -1,0 +1,11 @@
+Types: deb
+URIs: http://mirror.yandex.ru/debian/
+Suites: {{ ansible_facts["distribution_release"] }} {{ ansible_facts["distribution_release"] }}-updates
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+Types: deb
+URIs: http://mirror.yandex.ru/debian-security/
+Suites: {{ ansible_facts["distribution_release"] }}-security
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg

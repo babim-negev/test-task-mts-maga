@@ -1,0 +1,22 @@
+---
+- name: Проверить целевую VM для Kyverno MVP
+  hosts: kyverno_mvp
+  become: false
+  gather_facts: true
+
+  roles:
+    - preflight
+
+- name: Подготовить VM и установить single-node k3s
+  hosts: kyverno_mvp
+  become: true
+  gather_facts: true
+
+  roles:
+    - apt_mirrors
+    - base
+    - k3s
+    - helm
+    - argocd
+    - envoy_gateway
+    - observability

@@ -1,0 +1,105 @@
+---
+- name: Установить Envoy Gateway из закрепленного manifest
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    apply
+    --server-side
+    --force-conflicts
+    -f {{ envoy_gateway_install_manifest_url }}
+  environment:
+    KUBECONFIG: "{{ k3s_kubeconfig_path }}"
+  register: envoy_gateway_apply
+  changed_when: envoy_gateway_apply.stdout is search("created|configured")
+
+- name: Дождаться готовности Envoy Gateway deployment
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ envoy_gateway_namespace }}
+    rollout status deployment/{{ envoy_gateway_deployment_name }}
+    --timeout={{ envoy_gateway_wait_timeout }}
+  changed_when: false
+
+- name: Получить статус Envoy Gateway pods
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ envoy_gateway_namespace }}
+    get pods -o wide
+  register: envoy_gateway_pods
+  changed_when: false
+
+- name: Вывести статус Envoy Gateway pods
+  ansible.builtin.debug:
+    var: envoy_gateway_pods.stdout_lines
+
+- name: Сформировать Gateway API manifest для входящего трафика
+  ansible.builtin.template:
+    src: gateway-routing.yaml.j2
+    dest: "{{ envoy_gateway_manifest_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: envoy_gateway_routing_manifest
+
+- name: Применить Gateway API resources
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    apply
+    -f {{ envoy_gateway_manifest_path }}
+  register: envoy_gateway_routing_apply
+  changed_when: envoy_gateway_routing_apply.stdout is search("created|configured")
+
+- name: Дождаться принятия Gateway
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ envoy_gateway_namespace }}
+    wait gateway/{{ envoy_gateway_name }}
+    --for=condition=Accepted
+    --timeout={{ envoy_gateway_wait_timeout }}
+  changed_when: false
+
+- name: Дождаться запрограммированного Gateway
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ envoy_gateway_namespace }}
+    wait gateway/{{ envoy_gateway_name }}
+    --for=condition=Programmed
+    --timeout={{ envoy_gateway_wait_timeout }}
+  changed_when: false
+
+- name: Дождаться принятия HTTPRoute для Argo CD
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ argocd_namespace }}
+    get httproute {{ envoy_gateway_argocd_route_name }}
+    -o jsonpath='{.status.parents[0].conditions[?(@.type=="Accepted")].status}'
+  register: envoy_gateway_argocd_route_accepted
+  changed_when: false
+  retries: 60
+  delay: 5
+  until: envoy_gateway_argocd_route_accepted.stdout == "True"
+  when: envoy_gateway_argocd_route_enabled | bool
+
+- name: Получить Service Envoy Gateway
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ envoy_gateway_namespace }}
+    get service -o wide
+  register: envoy_gateway_services
+  changed_when: false
+
+- name: Вывести Service Envoy Gateway
+  ansible.builtin.debug:
+    var: envoy_gateway_services.stdout_lines
+
+- name: Сообщить hostname первого UI
+  ansible.builtin.debug:
+    msg: "Argo CD UI будет доступен через Envoy Gateway по http://{{ envoy_gateway_argocd_hostname }} после добавления VM IP в /etc/hosts."
+  when: envoy_gateway_argocd_route_enabled | bool

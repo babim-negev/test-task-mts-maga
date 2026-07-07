@@ -1,0 +1,34 @@
+name: Проверка политик Kyverno
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  kyverno:
+    name: Проверить политики Kyverno
+    runs-on: ubuntu-latest
+    env:
+      KYVERNO_VERSION: v1.14.4
+    steps:
+      - name: Скачать репозиторий
+        uses: actions/checkout@v4
+
+      - name: Установить Kyverno CLI
+        run: |
+          set -euo pipefail
+          curl -L \
+            "https://github.com/kyverno/kyverno/releases/download/${KYVERNO_VERSION}/kyverno-cli_${KYVERNO_VERSION}_linux_x86_64.tar.gz" \
+            -o kyverno-cli.tar.gz
+          tar -xzf kyverno-cli.tar.gz
+          sudo install kyverno /usr/local/bin/kyverno
+          kyverno version
+
+      - name: Запустить тесты политик
+        run: kyverno test policies/tests
+
+      - name: Проверить валидный demo manifest
+        run: kyverno apply policies/clusterpolicies -r demo/resources/good-pod.yaml

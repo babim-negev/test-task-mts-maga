@@ -1,0 +1,16 @@
+---
+envoy_gateway_namespace: envoy-gateway-system
+envoy_gateway_deployment_name: envoy-gateway
+envoy_gateway_version: "v1.8.1"
+envoy_gateway_install_manifest_url: "https://github.com/envoyproxy/gateway/releases/download/{{ envoy_gateway_version }}/install.yaml"
+envoy_gateway_wait_timeout: "600s"
+envoy_gateway_manifest_path: /tmp/kyverno-mvp-envoy-gateway-routing.yaml
+envoy_gateway_name: kyverno-mvp
+envoy_gateway_class_name: kyverno-mvp
+envoy_gateway_controller_name: gateway.envoyproxy.io/gatewayclass-controller
+envoy_gateway_http_port: 80
+envoy_gateway_argocd_route_enabled: true
+envoy_gateway_argocd_hostname: argocd.kyverno-mvp.local
+envoy_gateway_argocd_route_name: argocd
+envoy_gateway_argocd_service_name: argocd-gui
+envoy_gateway_argocd_service_port: 80

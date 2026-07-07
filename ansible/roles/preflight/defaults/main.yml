@@ -1,0 +1,6 @@
+---
+min_ram_mb: 7500
+min_cpu_count: 2
+min_disk_gb: 15
+
+target_user: "{{ ansible_user }}"
