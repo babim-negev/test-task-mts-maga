@@ -45,4 +45,6 @@ spec:
     - group: apiextensions.k8s.io
       kind: CustomResourceDefinition
       jsonPointers:
-        - /spec/conversion/webhook/clientConfig/caBundle
+        - /metadata/annotations
+        - /metadata/labels
+        - /spec/conversion
