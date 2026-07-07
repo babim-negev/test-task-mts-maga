@@ -391,14 +391,7 @@ kubectl --kubeconfig files/context/config.yaml -n monitoring port-forward svc/pr
 kubectl --kubeconfig files/context/config.yaml -n policy-reporter port-forward svc/policy-reporter-gui 8081:8080
 ```
 
-В Grafana включен anonymous-доступ с ролью `Viewer`; редактирование для viewer отключено:
-
-```yaml
-observability_grafana_anonymous_enabled: true
-observability_grafana_anonymous_org_role: Viewer
-observability_grafana_disable_login_form: true
-observability_grafana_viewers_can_edit: false
-```
+Grafana доступна для просмотра состояния стенда без отдельной настройки учетной записи.
 
 Главные переменные находятся в:
 
