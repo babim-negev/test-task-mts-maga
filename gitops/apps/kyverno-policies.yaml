@@ -20,4 +20,12 @@ spec:
       selfHeal: true
     syncOptions:
       - ServerSideApply=true
-
+  ignoreDifferences:
+    - group: kyverno.io
+      kind: ClusterPolicy
+      jsonPointers:
+        - /spec/admission
+        - /spec/emitWarning
+      jqPathExpressions:
+        - .spec.rules[]?.skipBackgroundRequests
+        - .spec.rules[]?.validate.allowExistingViolations
