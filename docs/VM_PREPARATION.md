@@ -2,6 +2,30 @@
 
 Проверяющий поднимает чистую Debian/Ubuntu VM самостоятельно, настраивает SSH-доступ и указывает IP в `ansible/inventory.ini`.
 
+Скачиваемый образ Debian для обычной установки в VirtualBox:
+
+```text
+https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.5.0-amd64-netinst.iso
+```
+
+Актуальный каталог с ISO и checksum:
+
+```text
+https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/
+```
+
+Если официальный CDN недоступен, можно взять ISO с зеркала Яндекса:
+
+```text
+https://mirror.yandex.ru/debian-cd/current/amd64/iso-cd/
+```
+
+Быстрые ссылки:
+
+- VirtualBox + Debian ISO: [VIRTUALBOX_DEBIAN.md](VIRTUALBOX_DEBIAN.md);
+- WSL2 как Ansible controller: [WSL_ANSIBLE.md](WSL_ANSIBLE.md);
+- libvirt/KVM + cloud-init: раздел ниже.
+
 Минимальные требования:
 
 - 2 vCPU;
@@ -12,6 +36,20 @@
 - пользователь с passwordless `sudo`.
 
 Рекомендуемый вариант для быстрого воспроизведения стенда - Debian cloud image + cloud-init. Такой путь проверялся в homelab через libvirt/KVM.
+
+Для VirtualBox проще использовать обычный Debian netinst ISO и ручную установку пользователя `debian`.
+
+Рекомендуемый пользователь VM для всех вариантов:
+
+```text
+debian
+```
+
+Для одноразовой тестовой VM рекомендуется passwordless sudo:
+
+```text
+debian ALL=(ALL) NOPASSWD:ALL
+```
 
 ## Вариант A: libvirt/KVM + cloud-init
 
@@ -109,61 +147,15 @@ virt-install \
 ssh debian@192.168.x.x
 ```
 
-## Вариант B: VirtualBox на Windows
+## Вариант B: VirtualBox на Windows/Linux/macOS
 
-VirtualBox тоже подходит, но cloud image в формате `qcow2` надо подготовить отдельно. Самый простой путь на Windows - использовать WSL2 или любую Linux-машину для подготовки диска и seed ISO, а саму VM запустить в VirtualBox.
+VirtualBox тоже подходит. Рекомендуемый путь - обычная установка Debian из netinst ISO, создание пользователя `debian`, включение SSH и passwordless sudo.
 
-В WSL/Linux скачать образ и сконвертировать его в VDI:
+Подробный гайд: [VIRTUALBOX_DEBIAN.md](VIRTUALBOX_DEBIAN.md).
 
-```bash
-curl -LO https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2
-qemu-img convert -O vdi debian-13-genericcloud-amd64.qcow2 kyverno-mvp.vdi
-```
+Если Ansible запускается с Windows-машины, используйте WSL2 как controller.
 
-Размер виртуального диска можно увеличить:
-
-```bash
-VBoxManage modifymedium disk kyverno-mvp.vdi --resize 30720
-```
-
-Далее создать `user-data`, `meta-data` и `seed.iso` так же, как в варианте libvirt:
-
-```bash
-cloud-localds seed.iso user-data meta-data
-```
-
-В VirtualBox:
-
-- создать Linux VM: Debian 64-bit;
-- выделить минимум 2 vCPU и 8 GB RAM;
-- подключить `kyverno-mvp.vdi` как основной диск;
-- подключить `seed.iso` как optical drive;
-- выбрать сетевой режим `Bridged Adapter`, чтобы VM получила IP из той же сети, где находится машина с Ansible;
-- запустить VM и дождаться завершения cloud-init.
-
-После запуска проверить SSH:
-
-```bash
-ssh debian@192.168.x.x
-```
-
-Если bridged-сеть в VirtualBox недоступна или мешает VPN, можно использовать `NAT` + port forwarding:
-
-- VM network: `NAT`;
-- port forwarding rule: host `127.0.0.1:2222` -> guest `22`;
-- inventory указывать с дополнительным SSH-port.
-
-Пример inventory для такого варианта:
-
-```ini
-[kyverno_mvp]
-kyverno-vm ansible_host=127.0.0.1 ansible_port=2222 ansible_user=debian ansible_ssh_private_key_file=~/.ssh/id_rsa
-
-[kyverno_mvp:vars]
-ansible_python_interpreter=/usr/bin/python3
-```
-
-Ansible лучше запускать из WSL/Linux/macOS. Нативный Windows как Ansible controller не является целевым сценарием этого проекта.
+Подробный гайд: [WSL_ANSIBLE.md](WSL_ANSIBLE.md).
 
 ## Вариант C: ручная установка из ISO
 

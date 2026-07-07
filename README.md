@@ -25,13 +25,13 @@
 
 ## Где Тестировалось
 
-Стенд проверялся в homelab на VM `kyverno-mvp`:
+Стенд проверялся в homelab на VM `kyverno-mvp-verify`:
 
 - гипервизор: libvirt/KVM на `bf-homelab`;
 - образ: Debian 13 GenericCloud;
 - boot mode: UEFI;
 - сеть: bridge `br0`;
-- IP VM: `192.168.10.250`;
+- IP VM: `192.168.10.116`;
 - SSH-пользователь: `debian`;
 - ресурсы VM: 4 vCPU, 8 GB RAM, 30 GB disk.
 
@@ -51,12 +51,12 @@ cp ansible/inventory.example.ini ansible/inventory.ini
 ansible-playbook -i ansible/inventory.ini ansible/playbook.yml
 ```
 
-5. Добавить VM IP в `/etc/hosts`:
+5. Добавить VM IP в `/etc/hosts`. В конце playbook Ansible печатает актуальный блок для копирования; пример для текущей проверочной VM:
 
 ```text
-192.168.10.250 argocd.kyverno-mvp.local
-192.168.10.250 grafana.kyverno-mvp.local
-192.168.10.250 policy-reporter.kyverno-mvp.local
+192.168.10.116 argocd.kyverno-mvp.local
+192.168.10.116 grafana.kyverno-mvp.local
+192.168.10.116 policy-reporter.kyverno-mvp.local
 ```
 
 6. Проверить UI:
@@ -88,12 +88,17 @@ ssh debian@192.168.x.x 'sudo k3s kubectl apply -f -' < demo/resources/bad-privil
 - SSH-доступ с машины, где запускается Ansible;
 - пользователь с passwordless `sudo`.
 
-Подробные варианты подготовки VM вынесены в отдельный документ: [docs/VM_PREPARATION.md](docs/VM_PREPARATION.md).
+Подробные варианты подготовки VM вынесены в отдельные документы:
+
+- общий обзор: [docs/VM_PREPARATION.md](docs/VM_PREPARATION.md);
+- VirtualBox + Debian ISO: [docs/VIRTUALBOX_DEBIAN.md](docs/VIRTUALBOX_DEBIAN.md);
+- WSL2 как Ansible controller: [docs/WSL_ANSIBLE.md](docs/WSL_ANSIBLE.md).
 
 Там описаны:
 
 - libvirt/KVM + Debian cloud image + cloud-init;
-- VirtualBox на Windows через WSL/Linux-подготовку образа;
+- VirtualBox с обычной установкой Debian из ISO;
+- запуск Ansible из WSL2;
 - ручная установка Debian/Ubuntu из ISO без cloud-init.
 
 ## Ansible Запуск
@@ -165,7 +170,7 @@ ansible_python_interpreter=/usr/bin/python3
 
 ```ini
 [kyverno_mvp]
-kyverno-vm ansible_host=192.168.10.250 ansible_user=debian ansible_ssh_private_key_file=~/.ssh/id_rsa
+kyverno-vm ansible_host=192.168.10.116 ansible_user=debian ansible_ssh_private_key_file=~/.ssh/id_rsa
 ```
 
 Перед раскаткой надо проверить SSH/Ansible-доступ.
@@ -262,7 +267,7 @@ files/context/config.yaml
 Локальный файл добавлен в `.gitignore`, потому что внутри лежат client certificate/key. При копировании Ansible заменяет адрес API server с `127.0.0.1` на `ansible_host` из inventory, например:
 
 ```yaml
-server: https://192.168.10.250:6443
+server: https://192.168.10.116:6443
 ```
 
 Этот файл можно импортировать в Lens/OpenLens или использовать напрямую:
@@ -339,9 +344,9 @@ http://argocd.kyverno-mvp.local
 На машине проверяющего добавьте IP VM в `/etc/hosts`:
 
 ```text
-192.168.10.250 argocd.kyverno-mvp.local
-192.168.10.250 grafana.kyverno-mvp.local
-192.168.10.250 policy-reporter.kyverno-mvp.local
+192.168.10.116 argocd.kyverno-mvp.local
+192.168.10.116 grafana.kyverno-mvp.local
+192.168.10.116 policy-reporter.kyverno-mvp.local
 ```
 
 Версия kube-prometheus-stack по умолчанию зафиксирована в `ansible/roles/observability/defaults/main.yml`:
@@ -537,19 +542,19 @@ ssh debian@192.168.x.x sudo k3s kubectl get nodes -o wide
 Для текущей VM:
 
 ```bash
-ssh -i ~/.ssh/id_rsa debian@192.168.10.250 'sudo k3s kubectl get nodes -o wide'
+ssh -i ~/.ssh/id_rsa debian@192.168.10.116 'sudo k3s kubectl get nodes -o wide'
 ```
 
 Ожидаемый результат:
 
 ```text
-kyverno-mvp   Ready    control-plane   ...   v1.36.2+k3s1   192.168.10.250
+kyverno-mvp-verify   Ready    control-plane   ...   v1.36.2+k3s1   192.168.10.116
 ```
 
 Встроенный Traefik должен быть отключен:
 
 ```bash
-ssh -i ~/.ssh/id_rsa debian@192.168.10.250 'sudo k3s kubectl -n kube-system get deploy traefik'
+ssh -i ~/.ssh/id_rsa debian@192.168.10.116 'sudo k3s kubectl -n kube-system get deploy traefik'
 ```
 
 Ожидаемый результат:
@@ -561,7 +566,7 @@ Error from server (NotFound): deployments.apps "traefik" not found
 Проверить Argo CD:
 
 ```bash
-ssh -i ~/.ssh/id_rsa debian@192.168.10.250 'sudo k3s kubectl -n argocd get pods -o wide'
+ssh -i ~/.ssh/id_rsa debian@192.168.10.116 'sudo k3s kubectl -n argocd get pods -o wide'
 ```
 
 Ожидаемый результат: pods Argo CD находятся в состоянии `Running` и `Ready`.
