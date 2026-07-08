@@ -1,73 +1,122 @@
-# VirtualBox: Debian VM для Kyverno MVP
+# VirtualBox: Ubuntu/Debian VM для Kyverno MVP
 
-Скачиваемый образ в самый верх:
+Этот документ описывает подготовку Ubuntu или Debian VM в VirtualBox до
+состояния, когда Ansible может подключиться по SSH и выполнить основной
+playbook. После уточнения проверяющего основной путь - Ubuntu 24.04 LTS;
+Debian оставлен как fallback.
 
-- официальный Debian netinst ISO: https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.5.0-amd64-netinst.iso
-- каталог с актуальным ISO и checksum: https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/
-- зеркало Яндекса, если официальный CDN недоступен: https://mirror.yandex.ru/debian-cd/current/amd64/iso-cd/
+После успешной проверки SSH вернитесь в основной README:
+[Шаг 2. Подготовить Ansible Controller](../README.md#шаг-2-подготовить-ansible-controller).
+
+Полезные ссылки:
+
 - VirtualBox downloads: https://www.virtualbox.org/wiki/Downloads
+- Ubuntu Server downloads: https://ubuntu.com/download/server
+- Ubuntu 24.04 cloud images и checksum: https://cloud-images.ubuntu.com/releases/24.04/release/
+- официальный каталог Debian netinst ISO и checksum: https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/
+- зеркало Яндекса, если официальный CDN недоступен: https://mirror.yandex.ru/debian-cd/current/amd64/iso-cd/
 
-Этот путь нужен для проверяющего, который не использует libvirt/KVM и хочет поднять обычную VM в VirtualBox.
+## Быстрый Путь: Готовый VMDK
 
-## Рекомендуемые параметры VM
+Статус готовых дисков:
 
-Создайте новую VM:
+- `ubuntu-mts-test-amd64.vmdk` - основной кандидат для проверяющего на Ubuntu/x86_64 host, требует smoke-прогона перед публикацией;
+- `ubuntu-mts-test-arm64.vmdk` - ARM-кандидат для совместимых ARM hypervisor, требует smoke-прогона перед публикацией;
+- `debian-mts-test-arm64-virtualbox.vmdk` - проверено локально на Apple Silicon;
+- `debian-mts-test-amd64.vmdk` - ссылка будет добавлена после отдельного прогона amd64/x86_64.
+
+Готовый VMDK уже содержит:
+
+- пользователя `mts`;
+- пароль `mts`;
+- SSH на guest-port `22`;
+- passwordless sudo для `mts`;
+- `python3`, `git`;
+- hostname `ubuntu-mts-test`;
+- DHCP-сеть.
+
+В VirtualBox создайте новую VM:
 
 - Type: `Linux`;
-- Version: `Debian (64-bit)`;
+- Version: `Ubuntu (64-bit)` для amd64 host или ближайший доступный Linux ARM 64-bit profile для ARM host;
 - CPU: 4 vCPU recommended, 2 vCPU minimum;
-- RAM: 8 GB;
-- Disk: 30 GB dynamically allocated;
-- Network: `Bridged Adapter` preferred.
+- RAM: `8192 MB` minimum;
+- Hard Disk:
+  - x86_64/amd64: `Use an Existing Virtual Hard Disk File` -> `ubuntu-mts-test-amd64.vmdk`;
+  - ARM host: `Use an Existing Virtual Hard Disk File` -> `ubuntu-mts-test-arm64.vmdk`, если VirtualBox поддерживает такой guest;
+  - Apple Silicon fallback: `Use an Existing Virtual Hard Disk File` -> `debian-mts-test-arm64-virtualbox.vmdk`.
 
-`Bridged Adapter` удобнее для проверки: VM получит IP из вашей локальной сети, а Ansible сможет подключиться к ней по SSH напрямую.
+Сеть настраивается в свойствах VM, а не внутри VMDK:
 
-Если bridged-сеть недоступна, используйте `NAT` + port forwarding:
+- Adapter 1: `Enable Network Adapter`;
+- `Attached to: Bridged Adapter`;
+- выберите реальный интерфейс host-машины, например Wi-Fi или Ethernet;
+- NAT используйте только как запасной вариант.
 
-- host port: `2222`;
-- guest port: `22`.
+После boot зайдите в консоль VM:
 
-## Установка Debian
-
-Загрузите VM с `debian-13.5.0-amd64-netinst.iso`.
-
-Во время установки:
-
-- hostname: `kyverno-vm`;
-- username: `debian`;
-- root password можно не задавать, если installer предлагает оставить root disabled;
-- установите SSH server, если installer предлагает выбор software;
-- desktop environment не нужен.
-
-Пользователь `debian` выбран намеренно: он уже указан в `ansible/inventory.example.ini`.
-
-## Подготовка VM после первого boot
-
-Зайдите в VM через VirtualBox console и выполните:
-
-```bash
-sudo apt update
-sudo apt install -y openssh-server python3 sudo
-sudo systemctl enable --now ssh
+```text
+login: mts
+password: mts
 ```
 
-Рекомендуется passwordless sudo для одноразовой тестовой VM:
+Проверьте IP и базовые инструменты:
 
 ```bash
-sudo usermod -aG sudo debian
-echo 'debian ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/90-kyverno-mvp
-sudo chmod 0440 /etc/sudoers.d/90-kyverno-mvp
-```
-
-Проверьте:
-
-```bash
+hostname -I
+ip -4 addr show
 sudo -n true
+systemctl is-active ssh
+python3 --version
+git --version
 ```
 
-Команда должна завершиться без запроса пароля.
+Если используется свежий VMDK, SSH host keys создаются автоматически при первом
+boot. Если проверяется старый артефакт и `ssh` не стартует из-за отсутствующих
+host keys, выполните один раз:
 
-## SSH key
+```bash
+sudo ssh-keygen -A
+sudo systemctl restart ssh
+```
+
+Дальше настройте SSH key с Ansible controller.
+
+## Как Найти IP VM
+
+Если выбран `Bridged Adapter`, VM получает отдельный IP от вашей сети. Это не
+`localhost` и не `2022`; SSH будет на стандартном порту `22`:
+
+```bash
+ssh mts@192.168.x.x
+```
+
+Самые простые способы узнать адрес:
+
+1. В консоли VM выполнить:
+
+   ```bash
+   hostname -I
+   ip -4 addr show
+   ```
+
+   Нужен адрес не `127.0.0.1`, обычно что-то вроде `192.168.x.x`.
+
+2. В роутере или DHCP leases найти hostname:
+
+   ```text
+   ubuntu-mts-test
+   ```
+
+3. На Mac посмотреть ARP-соседей:
+
+   ```bash
+   arp -a | grep -i 08:00:27
+   ```
+
+   VirtualBox часто выдает VM MAC с префиксом `08:00:27`.
+
+## SSH Key
 
 На машине, где будет запускаться Ansible, создайте ключ, если его еще нет:
 
@@ -78,10 +127,11 @@ ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519
 Скопируйте публичный ключ в VM. Для bridged-сети:
 
 ```bash
-ssh-copy-id -i ~/.ssh/id_ed25519.pub debian@192.168.x.x
+ssh-copy-id -i ~/.ssh/id_ed25519.pub mts@192.168.x.x
 ```
 
-Если `ssh-copy-id` недоступен, добавьте содержимое `~/.ssh/id_ed25519.pub` в файл VM:
+Если `ssh-copy-id` недоступен, добавьте содержимое
+`~/.ssh/id_ed25519.pub` в файл VM:
 
 ```bash
 mkdir -p ~/.ssh
@@ -93,35 +143,30 @@ chmod 600 ~/.ssh/authorized_keys
 Проверьте SSH:
 
 ```bash
-ssh debian@192.168.x.x 'whoami && sudo -n true && hostname'
+ssh mts@192.168.x.x 'whoami && sudo -n true && hostname'
 ```
 
 Ожидаемо:
 
 ```text
-debian
-kyverno-vm
+mts
+ubuntu-mts-test
 ```
 
-## Inventory для bridged-сети
+## Inventory Для Bridged-Сети
 
-Скопируйте example inventory:
-
-```bash
-cp ansible/inventory.example.ini ansible/inventory.ini
-```
-
-Пример:
+В основном README этот шаг описан подробнее. Для bridged-сети inventory обычно
+выглядит так:
 
 ```ini
 [kyverno_mvp]
-kyverno-vm ansible_host=192.168.x.x ansible_user=debian ansible_ssh_private_key_file=~/.ssh/id_ed25519
+kyverno-vm ansible_host=192.168.x.x ansible_user=mts ansible_ssh_private_key_file=~/.ssh/id_ed25519
 
 [kyverno_mvp:vars]
 ansible_python_interpreter=/usr/bin/python3
 ```
 
-Проверьте Ansible-доступ:
+Проверить Ansible-доступ:
 
 ```bash
 ansible all -i ansible/inventory.ini -m ping
@@ -133,19 +178,107 @@ ansible all -i ansible/inventory.ini -m ping
 kyverno-vm | SUCCESS => ...
 ```
 
-## Inventory для NAT + port forwarding
+## Запасной Путь: Установка Ubuntu Из ISO
 
-Если VirtualBox VM использует NAT и проброс `host:2222 -> guest:22`, inventory на Linux/macOS обычно выглядит так:
+Если готовый VMDK недоступен, создайте VM с обычным Ubuntu 24.04 Server ISO.
+
+Рекомендуемые параметры VM:
+
+- Type: `Linux`;
+- Version: `Ubuntu (64-bit)`;
+- CPU: 4 vCPU recommended, 2 vCPU minimum;
+- RAM: `8192 MB` minimum;
+- Disk: 30 GB dynamically allocated;
+- Network: `Bridged Adapter` preferred.
+
+Во время установки:
+
+- hostname: `kyverno-vm`;
+- username: `mts`;
+- root password можно не задавать, если installer предлагает оставить root disabled;
+- установите SSH server, если installer предлагает выбор software;
+- desktop environment не нужен.
+
+После первого boot зайдите в VM через VirtualBox console и выполните:
+
+```bash
+sudo apt update
+sudo apt install -y openssh-server python3 sudo git
+sudo systemctl enable --now ssh
+```
+
+Настройте passwordless sudo для одноразовой тестовой VM:
+
+```bash
+sudo usermod -aG sudo mts
+echo 'mts ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/90-kyverno-mvp
+sudo chmod 0440 /etc/sudoers.d/90-kyverno-mvp
+sudo -n true
+```
+
+После этого настройте SSH key и проверьте вход с Ansible controller.
+
+## Debian fallback
+
+Если Ubuntu-образ в конкретном hypervisor недоступен, можно использовать Debian
+13 VM. Для Debian fallback остаются старые значения: user `debian`,
+passwordless sudo, SSH guest-port `22`, hostname `debian-mts-test`, DHCP. Для
+amd64 ручной установки подходит Debian netinst ISO из официального каталога:
+
+```text
+https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/
+```
+
+## NAT Только Как Запасной Вариант
+
+Если выбран `NAT`, отдельного LAN IP не будет. Тогда в настройках VirtualBox
+нужно добавить port forwarding:
+
+```text
+host 127.0.0.1:2222 -> guest :22
+```
+
+Подключение по SSH:
+
+```bash
+ssh -p 2222 mts@127.0.0.1
+```
+
+Для второй NAT VM нельзя использовать тот же host-port `2222`; выберите
+`2223`, `2224` и так далее.
+
+Для доступа к Kubernetes API с host-машины через kubeconfig, Lens или OpenLens
+при NAT нужен отдельный tunnel до guest-port `6443`:
+
+```bash
+ssh -N -L 6443:127.0.0.1:6443 -p 2222 mts@127.0.0.1
+```
+
+Если SSH host-port другой, например `2022`, замените `-p 2222` на свой порт.
+После этого локальный kubeconfig должен смотреть на:
+
+```text
+server: https://127.0.0.1:6443
+```
+
+При bridged-сети tunnel обычно не нужен: kubeconfig может смотреть прямо на
+IP VM, например `https://192.168.x.x:6443`.
+
+## Inventory Для NAT + Port Forwarding
+
+Если VirtualBox VM использует NAT и проброс `host:2222 -> guest:22`, inventory
+на Linux/macOS обычно выглядит так:
 
 ```ini
 [kyverno_mvp]
-kyverno-vm ansible_host=127.0.0.1 ansible_port=2222 ansible_user=debian ansible_ssh_private_key_file=~/.ssh/id_ed25519
+kyverno-vm ansible_host=127.0.0.1 ansible_port=2222 ansible_user=mts ansible_ssh_private_key_file=~/.ssh/id_ed25519 k3s_local_kubeconfig_server_host=127.0.0.1
 
 [kyverno_mvp:vars]
 ansible_python_interpreter=/usr/bin/python3
 ```
 
-Если Ansible запускается из WSL2, `127.0.0.1:2222` может указывать на сам WSL, а не на Windows host. В этом случае используйте IP Windows host из WSL:
+Если Ansible запускается из WSL2, `127.0.0.1:2222` может указывать на сам WSL,
+а не на Windows host. В этом случае используйте IP Windows host из WSL:
 
 ```bash
 ip route | awk '/default/ {print $3}'
@@ -153,12 +286,22 @@ ip route | awk '/default/ {print $3}'
 
 И подставьте его в `ansible_host`.
 
-## Запуск
+## Возврат В README
 
-После успешного `ansible ping` вернитесь в основной README и выполните раздел `Ansible Запуск`:
+Когда проверка проходит:
 
 ```bash
-ansible-playbook -i ansible/inventory.ini ansible/playbook.yml
+ssh mts@192.168.x.x 'whoami && sudo -n true && hostname'
 ```
 
-В конце playbook напечатает готовый блок для `/etc/hosts` в копируемом виде.
+или для NAT:
+
+```bash
+ssh -p 2222 mts@127.0.0.1 'whoami && sudo -n true && hostname'
+```
+
+вернитесь в основной README:
+
+- [Шаг 2. Подготовить Ansible Controller](../README.md#шаг-2-подготовить-ansible-controller);
+- [Шаг 3. Заполнить Inventory](../README.md#шаг-3-заполнить-inventory);
+- [Шаг 4. Запустить Playbook](../README.md#шаг-4-запустить-playbook).

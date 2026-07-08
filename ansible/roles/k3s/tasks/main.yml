@@ -99,8 +99,8 @@
       {{
         k3s_remote_kubeconfig.content
         | b64decode
-        | replace('https://127.0.0.1:6443', 'https://' ~ k3s_local_kubeconfig_server_host ~ ':6443')
-        | replace('https://localhost:6443', 'https://' ~ k3s_local_kubeconfig_server_host ~ ':6443')
+        | replace('https://127.0.0.1:6443', k3s_local_kubeconfig_server_url)
+        | replace('https://localhost:6443', k3s_local_kubeconfig_server_url)
       }}
     mode: "0600"
   delegate_to: localhost

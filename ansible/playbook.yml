@@ -35,3 +35,5 @@
           http://{{ envoy_gateway_argocd_hostname }}
           http://{{ observability_grafana_hostname }}
           http://{{ policy_reporter_hostname }}
+
+          Kubeconfig для проверки кластера лежит в files/context.

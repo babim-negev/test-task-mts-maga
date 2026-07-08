@@ -7,7 +7,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/babim-negev/test-task-mts-maga.git
-    targetRevision: HEAD
+    targetRevision: main
     path: demo/gitops
     directory:
       recurse: true
@@ -20,4 +20,3 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-

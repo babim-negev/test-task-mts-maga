@@ -3,9 +3,9 @@
 Этот документ описывает Windows-сценарий:
 
 ```text
-Windows + VirtualBox VM с Debian
+Windows + VirtualBox VM с Ubuntu/Debian
 WSL2 Ubuntu как Ansible controller
-Ansible по SSH подключается к Debian VM
+Ansible по SSH подключается к Ubuntu/Debian VM
 ```
 
 Нативный Windows как Ansible controller не является целевым сценарием проекта. Проще и надежнее запускать Ansible из WSL2.
@@ -35,18 +35,18 @@ sudo apt install -y git python3 python3-venv python3-pip openssh-client sshpass
 ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519
 ```
 
-Скопируйте ключ в Debian VM.
+Скопируйте ключ в Ubuntu/Debian VM.
 
 Для bridged-сети:
 
 ```bash
-ssh-copy-id -i ~/.ssh/id_ed25519.pub debian@192.168.x.x
+ssh-copy-id -i ~/.ssh/id_ed25519.pub mts@192.168.x.x
 ```
 
 Для NAT + port forwarding `host:2222 -> guest:22` попробуйте:
 
 ```bash
-ssh-copy-id -i ~/.ssh/id_ed25519.pub -p 2222 debian@127.0.0.1
+ssh-copy-id -i ~/.ssh/id_ed25519.pub -p 2222 mts@127.0.0.1
 ```
 
 Если WSL2 не видит Windows localhost, найдите IP Windows host:
@@ -58,7 +58,7 @@ ip route | awk '/default/ {print $3}'
 И используйте его:
 
 ```bash
-ssh-copy-id -i ~/.ssh/id_ed25519.pub -p 2222 debian@<windows-host-ip>
+ssh-copy-id -i ~/.ssh/id_ed25519.pub -p 2222 mts@<windows-host-ip>
 ```
 
 ## 4. Проверить VM
@@ -66,20 +66,20 @@ ssh-copy-id -i ~/.ssh/id_ed25519.pub -p 2222 debian@<windows-host-ip>
 Bridged-сеть:
 
 ```bash
-ssh debian@192.168.x.x 'whoami && sudo -n true && hostname'
+ssh mts@192.168.x.x 'whoami && sudo -n true && hostname'
 ```
 
 NAT + port forwarding:
 
 ```bash
-ssh -p 2222 debian@127.0.0.1 'whoami && sudo -n true && hostname'
+ssh -p 2222 mts@127.0.0.1 'whoami && sudo -n true && hostname'
 ```
 
 Если `sudo -n true` просит пароль или падает, настройте passwordless sudo внутри VM:
 
 ```bash
-sudo usermod -aG sudo debian
-echo 'debian ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/90-kyverno-mvp
+sudo usermod -aG sudo mts
+echo 'mts ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/90-kyverno-mvp
 sudo chmod 0440 /etc/sudoers.d/90-kyverno-mvp
 ```
 
@@ -103,7 +103,7 @@ cp ansible/inventory.example.ini ansible/inventory.ini
 
 ```ini
 [kyverno_mvp]
-kyverno-vm ansible_host=192.168.x.x ansible_user=debian ansible_ssh_private_key_file=~/.ssh/id_ed25519
+kyverno-vm ansible_host=192.168.x.x ansible_user=mts ansible_ssh_private_key_file=~/.ssh/id_ed25519
 
 [kyverno_mvp:vars]
 ansible_python_interpreter=/usr/bin/python3
@@ -121,7 +121,7 @@ ansible all -i ansible/inventory.ini -m ping
 
 ```ini
 [kyverno_mvp]
-kyverno-vm ansible_host=127.0.0.1 ansible_port=2222 ansible_user=debian ansible_ssh_private_key_file=~/.ssh/id_ed25519
+kyverno-vm ansible_host=127.0.0.1 ansible_port=2222 ansible_user=mts ansible_ssh_private_key_file=~/.ssh/id_ed25519
 
 [kyverno_mvp:vars]
 ansible_python_interpreter=/usr/bin/python3

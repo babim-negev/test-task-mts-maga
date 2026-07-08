@@ -179,15 +179,6 @@
   loop: "{{ argocd_statefulsets.stdout_lines }}"
   changed_when: false
 
-- name: Дождаться готовности всех Argo CD pods
-  ansible.builtin.command: >-
-    {{ k3s_binary_path }} kubectl
-    --kubeconfig {{ k3s_kubeconfig_path }}
-    -n {{ argocd_namespace }}
-    wait --for=condition=Ready pod --all
-    --timeout={{ argocd_rollout_timeout }}
-  changed_when: false
-
 - name: Проверить repo URL для root application
   ansible.builtin.fail:
     msg: "argocd_apply_root_application=true, но argocd_root_application_repo_url не задан."

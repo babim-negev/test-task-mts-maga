@@ -2,117 +2,110 @@
 
 Пилотный стенд Kubernetes + Kyverno для SRE-тестового задания.
 
+Репозиторий рассчитан на запуск из локальной машины на чистую Debian/Ubuntu VM
+в той же сети. Для развертывания стенда нужно подготовить VM, заполнить
+Ansible inventory и запустить один playbook.
+
+Решение подготовлено для задания `Kyverno MVP` из SRE-тестового задания
+MTS True Tech. Исходный PDF использовался как формулировка требований, но для
+проверки достаточно этого README и файлов репозитория.
+
+## Что Должно Получиться
+
+После выполнения инструкций получится стенд со следующими компонентами:
+
+- развернутый single-node Kubernetes на k3s;
+- GitOps-компонент Argo CD;
+- контроллер входящего трафика Envoy Gateway + Gateway API;
+- Prometheus и Grafana;
+- Kyverno;
+- Policy Reporter для визуализации состояния политик;
+- репозиторий с несколькими Kyverno policies;
+- автоматические тесты политик через `kyverno test`;
+- CI-процесс, который падает при сломанных policy tests и может быть
+  назначен обязательной проверкой для защищенной ветки `main`;
+- реальную работу admission control: кластер отклоняет небезопасный manifest.
+
 Целевая архитектура стенда:
 
 - Kubernetes: single-node k3s на чистой Debian/Ubuntu VM;
-- GitOps: Argo CD;
+- GitOps: Argo CD App of Apps;
 - входящий трафик: Envoy Gateway + Gateway API;
-- observability: Prometheus + Grafana;
+- observability: kube-prometheus-stack, Prometheus, Grafana;
 - policy engine: Kyverno;
 - policy visibility: Policy Reporter;
 - тесты политик: `kyverno test`;
-- запуск: Ansible, без `.sh`-оберток.
+- запуск выполняется через Ansible playbook.
 
-Сейчас реализованы:
+## Рабочий Сценарий
 
-- **Этап 1**: базовая подготовка VM;
-- **Этап 2**: установка single-node k3s;
-- **Этап 3**: bootstrap Argo CD;
-- **Этап 4**: Envoy Gateway и первый HTTPRoute для Argo CD UI;
-- **Этап 5**: Observability через kube-prometheus-stack и Grafana;
-- **Этап 6**: GitOps App of Apps для Kyverno, Policy Reporter, политик и demo;
-- **Этап 7**: политики Kyverno, `kyverno test`, CI и demo admission deny.
+Основной путь для запуска:
 
-## Где Тестировалось
+1. Подготовить чистую Ubuntu 24.04 LTS VM с 8 GB RAM.
+2. Включить SSH-доступ к VM с локальной машины.
+3. Настроить пользователя VM с passwordless `sudo`.
+4. Указать IP VM в `ansible/inventory.ini`.
+5. Запустить `ansible-playbook`.
+6. Добавить выведенные playbook записи в `/etc/hosts`.
+7. Открыть Argo CD, Grafana и Policy Reporter в browser.
+8. Проверить, что Kyverno отклоняет небезопасный manifest.
 
-Стенд проверялся в homelab на VM `kyverno-mvp-verify`:
+Поддерживаемые варианты VM:
 
-- гипервизор: libvirt/KVM на `bf-homelab`;
-- образ: Debian 13 GenericCloud;
-- boot mode: UEFI;
-- сеть: bridge `br0`;
-- IP VM: `192.168.10.116`;
-- SSH-пользователь: `debian`;
-- ресурсы VM: 4 vCPU, 8 GB RAM, 30 GB disk.
+- Ubuntu 24.04 LTS `amd64` на Ubuntu/Linux host - recommended после уточнения проверяющего;
+- Ubuntu 24.04 LTS `arm64` - запасной ARM-вариант для совместимых hypervisor;
+- Debian 13 `amd64/arm64` - уже подготовленный fallback;
+- QEMU/libvirt + Debian cloud image + bridged-сеть - проверено локально.
 
-## Быстрая Проверка За 15 Минут
+Для обычного локального запуска рекомендуется `Bridged Adapter` или другая
+сеть, где VM получает IP, доступный с Ansible controller. NAT и localhost port
+forwarding описаны как запасной вариант в VM-документации.
 
-1. Подготовить чистую Debian/Ubuntu VM с SSH и passwordless `sudo`.
-2. Скопировать inventory:
+## Шаг 1. Подготовить VM
 
-```bash
-cp ansible/inventory.example.ini ansible/inventory.ini
-```
+Поднимите чистую Ubuntu 24.04 LTS VM. Debian 13 тоже поддерживается как
+fallback, если Ubuntu-образ в конкретном hypervisor недоступен.
 
-3. Указать IP VM и SSH-пользователя в `ansible/inventory.ini`.
-4. Запустить bootstrap:
-
-```bash
-ansible-playbook -i ansible/inventory.ini ansible/playbook.yml
-```
-
-5. Добавить VM IP в `/etc/hosts`. В конце playbook Ansible печатает актуальный блок для копирования; пример для текущей проверочной VM:
-
-```text
-192.168.10.116 argocd.kyverno-mvp.local
-192.168.10.116 grafana.kyverno-mvp.local
-192.168.10.116 policy-reporter.kyverno-mvp.local
-```
-
-6. Проверить UI:
-
-```text
-http://argocd.kyverno-mvp.local
-http://grafana.kyverno-mvp.local
-http://policy-reporter.kyverno-mvp.local
-```
-
-7. Проверить admission deny:
-
-```bash
-ssh debian@192.168.x.x 'sudo k3s kubectl apply -f -' < demo/resources/bad-privileged-pod.yaml
-```
-
-Ожидаемый результат: Kubernetes API отклоняет pod с сообщением Kyverno policy violation.
-
-## Подготовка VM
-
-Проверяющий поднимает чистую VM Debian или Ubuntu самостоятельно, настраивает SSH-доступ и указывает IP в Ansible inventory.
-
-Минимальные требования для комфортного запуска стенда:
+Минимальные требования:
 
 - 2 vCPU;
 - 8 GB RAM;
-- 15 GB disk minimum, 25-30 GB recommended for a comfortable margin;
+- 15 GB disk minimum, 25-30 GB recommended;
 - доступ в интернет с VM;
 - SSH-доступ с машины, где запускается Ansible;
 - пользователь с passwordless `sudo`.
 
-Подробные варианты подготовки VM вынесены в отдельные документы:
+Подробная инструкция по VM:
 
-- общий обзор: [docs/VM_PREPARATION.md](docs/VM_PREPARATION.md);
-- VirtualBox + Debian ISO: [docs/VIRTUALBOX_DEBIAN.md](docs/VIRTUALBOX_DEBIAN.md);
+- общий вход: [docs/VM_PREPARATION.md](docs/VM_PREPARATION.md);
+- VirtualBox Ubuntu/Debian: [docs/VIRTUALBOX_DEBIAN.md](docs/VIRTUALBOX_DEBIAN.md);
 - WSL2 как Ansible controller: [docs/WSL_ANSIBLE.md](docs/WSL_ANSIBLE.md).
 
-Там описаны:
+План тестирования готовых VM-образов находится в
+[docs/testing/VM_IMAGES.md](docs/testing/VM_IMAGES.md).
 
-- libvirt/KVM + Debian cloud image + cloud-init;
-- VirtualBox с обычной установкой Debian из ISO;
-- запуск Ansible из WSL2;
-- ручная установка Debian/Ubuntu из ISO без cloud-init.
+Рекомендуемый пользователь VM для примеров:
 
-## Ansible Запуск
+```text
+mts
+```
 
-Все команды ниже предполагают, что текущий каталог - корень репозитория:
+Проверка с локальной машины должна проходить без интерактивного пароля:
+
+```bash
+ssh mts@192.168.x.x 'whoami && sudo -n true && hostname'
+```
+
+## Шаг 2. Подготовить Ansible Controller
+
+Все команды ниже выполняются из корня репозитория:
 
 ```bash
 pwd
-# .../test-task-mts
+# .../mvp-task-mts
 ```
 
-### 1. Подготовить локальное окружение
-
-Создать Python virtualenv в корне репозитория:
+Создать Python virtualenv:
 
 ```bash
 python3 -m venv .venv
@@ -136,21 +129,21 @@ python -m pip install -U pip
 python -m pip install ansible
 ```
 
-Установить Ansible collections из репозитория:
+Установить Ansible collections:
 
 ```bash
 ansible-galaxy collection install -r ansible/requirements.yml
 ```
 
-Если вы уже находитесь внутри каталога `ansible/`, используйте путь без дополнительного префикса:
+Если команда запускается из каталога `ansible/`, используйте:
 
 ```bash
 ansible-galaxy collection install -r requirements.yml
 ```
 
-### 2. Заполнить inventory
+## Шаг 3. Заполнить Inventory
 
-Скопировать пример inventory:
+Скопировать пример:
 
 ```bash
 cp ansible/inventory.example.ini ansible/inventory.ini
@@ -160,50 +153,111 @@ cp ansible/inventory.example.ini ansible/inventory.ini
 
 ```ini
 [kyverno_mvp]
-kyverno-vm ansible_host=192.168.x.x ansible_user=debian ansible_ssh_private_key_file=~/.ssh/id_rsa
+kyverno-vm ansible_host=192.168.x.x ansible_user=mts ansible_ssh_private_key_file=~/.ssh/id_ed25519
 
 [kyverno_mvp:vars]
 ansible_python_interpreter=/usr/bin/python3
 ```
 
-Для нашего `bf-homelab` VM переведена на внешний bridge `br0` и использует статический адрес:
+Замените `192.168.x.x` на IP вашей VM.
 
-```ini
-[kyverno_mvp]
-kyverno-vm ansible_host=192.168.10.116 ansible_user=debian ansible_ssh_private_key_file=~/.ssh/id_rsa
-```
-
-Перед раскаткой надо проверить SSH/Ansible-доступ.
-
-Проверено:
+Проверить Ansible-доступ:
 
 ```bash
 ansible all -i ansible/inventory.ini -m ping
 ```
 
-возвращает `pong` для `kyverno-vm`.
+Ожидаемый результат:
 
-### 3. Проверить доступность VM
-
-```bash
-ansible all -i ansible/inventory.ini -m ping
+```text
+kyverno-vm | SUCCESS => ...
 ```
 
-### 4. Запустить playbook
+Если VM доступна только через NAT/localhost port forwarding, используйте
+пример из [docs/VIRTUALBOX_DEBIAN.md](docs/VIRTUALBOX_DEBIAN.md#inventory-для-nat--port-forwarding).
 
-Запустить playbook:
+## Шаг 4. Запустить Playbook
+
+Запустить полный bootstrap:
 
 ```bash
 ansible-playbook -i ansible/inventory.ini ansible/playbook.yml
 ```
 
-Если вы запускаете команду из каталога `ansible/`:
+Если команда запускается из каталога `ansible/`:
 
 ```bash
 ansible-playbook -i inventory.ini playbook.yml
 ```
 
-В проекте намеренно нет `.sh`-скриптов: запуск должен быть прозрачным и воспроизводимым через Ansible.
+В конце playbook напечатает блок для `/etc/hosts` и напомнит, что kubeconfig
+для локальной проверки лежит в `files/context/config.yaml`.
+
+## Шаг 5. Добавить /etc/hosts
+
+На машине, где открывается browser, добавьте VM IP и домены UI в `/etc/hosts`.
+Playbook печатает актуальный блок автоматически.
+
+Пример:
+
+```text
+192.168.x.x argocd.kyverno-mvp.local
+192.168.x.x grafana.kyverno-mvp.local
+192.168.x.x policy-reporter.kyverno-mvp.local
+```
+
+После этого UI доступны по адресам:
+
+```text
+http://argocd.kyverno-mvp.local
+http://grafana.kyverno-mvp.local
+http://policy-reporter.kyverno-mvp.local
+```
+
+## Шаг 6. Проверить UI И Kyverno Deny
+
+Проверить Kubernetes node:
+
+```bash
+ssh mts@192.168.x.x 'sudo k3s kubectl get nodes -o wide'
+```
+
+Ожидаемо node находится в состоянии `Ready`.
+
+Проверить Argo CD:
+
+```bash
+ssh mts@192.168.x.x 'sudo k3s kubectl -n argocd get pods'
+```
+
+Проверить Kyverno:
+
+```bash
+ssh mts@192.168.x.x 'sudo k3s kubectl -n kyverno get pods'
+ssh mts@192.168.x.x 'sudo k3s kubectl get clusterpolicies'
+```
+
+Проверить Policy Reporter:
+
+```bash
+ssh mts@192.168.x.x 'sudo k3s kubectl -n policy-reporter get pods,svc'
+```
+
+Проверить admission deny:
+
+```bash
+ssh mts@192.168.x.x 'sudo k3s kubectl create namespace kyverno-demo --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
+ssh mts@192.168.x.x 'sudo k3s kubectl apply -f -' < demo/resources/bad-privileged-pod.yaml
+```
+
+Ожидаемый результат: Kubernetes API отклоняет pod с сообщением Kyverno policy
+violation, например по политике `disallow-privileged-containers`.
+
+Проверить валидный pod:
+
+```bash
+ssh mts@192.168.x.x 'sudo k3s kubectl apply -f -' < demo/resources/good-pod.yaml
+```
 
 ## Что Делает Playbook
 
@@ -215,7 +269,7 @@ Playbook:
 - переключает apt на зеркала Яндекса, если `use_russian_mirrors=true`;
 - устанавливает базовые пакеты;
 - включает SSH service;
-- подготавливает kernel modules и sysctl для будущего k3s;
+- подготавливает kernel modules и sysctl для k3s;
 - устанавливает pinned k3s binary;
 - настраивает single-node k3s server;
 - отключает встроенный Traefik;
@@ -232,25 +286,15 @@ Playbook:
 - публикует Grafana через Envoy Gateway;
 - применяет root `Application` для App of Apps.
 
-Версия k3s по умолчанию зафиксирована в `ansible/roles/k3s/defaults/main.yml`:
-
-```yaml
-k3s_version: "v1.36.2+k3s1"
-```
-
-K3s скачивается напрямую из GitHub Releases:
+Основные настройки находятся в:
 
 ```text
-https://github.com/k3s-io/k3s/releases/download/v1.36.2+k3s1/k3s
+ansible/group_vars/all/common.yml
+ansible/group_vars/all/mirrors.yml
+ansible/roles/*/defaults/main.yml
 ```
 
-Повторный запуск не скачивает k3s binary заново, если файл уже есть на VM. Для принудительной повторной загрузки можно выставить:
-
-```yaml
-k3s_force_download: true
-```
-
-### Kubeconfig k3s
+## Kubeconfig K3s
 
 Kubeconfig k3s создается на server-node:
 
@@ -258,19 +302,18 @@ Kubeconfig k3s создается на server-node:
 /etc/rancher/k3s/k3s.yaml
 ```
 
-Во время запуска playbook этот kubeconfig автоматически копируется на машину, где запускается Ansible:
+Во время запуска playbook этот kubeconfig автоматически копируется на машину,
+где запускается Ansible:
 
 ```text
 files/context/config.yaml
 ```
 
-Локальный файл добавлен в `.gitignore`, потому что внутри лежат client certificate/key. При копировании Ansible заменяет адрес API server с `127.0.0.1` на `ansible_host` из inventory, например:
+Локальный файл добавлен в `.gitignore`, потому что внутри лежат client
+certificate/key. При копировании Ansible заменяет адрес API server с
+`127.0.0.1` на `ansible_host` из inventory.
 
-```yaml
-server: https://192.168.10.116:6443
-```
-
-Этот файл можно импортировать в Lens/OpenLens или использовать напрямую:
+Пример локальной проверки:
 
 ```bash
 kubectl --kubeconfig files/context/config.yaml get nodes -o wide
@@ -282,89 +325,16 @@ kubectl --kubeconfig files/context/config.yaml get nodes -o wide
 ansible-playbook -i ansible/inventory.ini ansible/playbook.yml --tags k3s_kubeconfig
 ```
 
-На самой VM можно работать без копирования файла:
-
-```bash
-sudo k3s kubectl get nodes -o wide
-```
-
-Если kubeconfig нужно скачать вручную, скопируйте его с VM и замените адрес API server с `127.0.0.1` на IP или DNS-имя VM:
-
-```bash
-mkdir -p ~/.kube
-ssh debian@192.168.x.x 'sudo cat /etc/rancher/k3s/k3s.yaml' > ~/.kube/config
-kubectl config set-cluster default --server=https://192.168.x.x:6443
-kubectl get nodes -o wide
-```
-
-Версия Argo CD по умолчанию зафиксирована в `ansible/roles/argocd/defaults/main.yml`:
-
-```yaml
-argocd_version: "v3.4.4"
-```
-
-Argo CD устанавливается из официального manifest:
-
-```text
-https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.4/manifests/install.yaml
-```
-
-По умолчанию роль заменяет Redis image из официального manifest Argo CD на Yandex mirror, чтобы стенд не зависел от `public.ecr.aws`:
-
-```yaml
-argocd_redis_image_override: "cr.yandex/mirror/library/redis:8.2.3-alpine"
-```
-
-Если нужно принудительно переехать на новую версию Argo CD или повторно применить официальный manifest, выставьте `argocd_force_apply: true`.
-
-Argo CD server переводится в insecure mode для публикации через HTTP Gateway:
-
-```yaml
-argocd_server_insecure: true
-```
-
-Версия Helm по умолчанию зафиксирована в `ansible/roles/helm/defaults/main.yml`:
-
-```yaml
-helm_version: "v4.2.2"
-```
-
-Версия Envoy Gateway по умолчанию зафиксирована в `ansible/roles/envoy_gateway/defaults/main.yml`:
-
-```yaml
-envoy_gateway_version: "v1.8.1"
-```
-
-Первый опубликованный UI - Argo CD:
-
-```text
-http://argocd.kyverno-mvp.local
-```
-
-На машине проверяющего добавьте IP VM в `/etc/hosts`:
-
-```text
-192.168.10.116 argocd.kyverno-mvp.local
-192.168.10.116 grafana.kyverno-mvp.local
-192.168.10.116 policy-reporter.kyverno-mvp.local
-```
-
-Версия kube-prometheus-stack по умолчанию зафиксирована в `ansible/roles/observability/defaults/main.yml`:
-
-```yaml
-observability_chart_name: kube-prometheus-stack
-observability_chart_version: "87.10.1"
-```
-
-Grafana доступна без логина по адресу:
-
-```text
-http://grafana.kyverno-mvp.local
-```
+Если VM доступна через NAT/localhost port forwarding, для локального `kubectl`,
+Lens или OpenLens нужен tunnel до Kubernetes API. Пример есть в
+[docs/VIRTUALBOX_DEBIAN.md](docs/VIRTUALBOX_DEBIAN.md#nat-только-как-запасной-вариант).
 
 ## GUI-Сервисы И Port-forward
 
-Все сервисы, предназначенные для ручного просмотра через browser/port-forward, имеют `gui` в имени:
+Основной способ открыть UI - через Envoy Gateway и записи в `/etc/hosts`.
+
+Все сервисы, предназначенные для ручного просмотра через browser/port-forward,
+имеют `gui` в имени:
 
 ```bash
 kubectl --kubeconfig files/context/config.yaml get svc -A | grep gui
@@ -388,51 +358,13 @@ kubectl --kubeconfig files/context/config.yaml -n monitoring port-forward svc/pr
 kubectl --kubeconfig files/context/config.yaml -n policy-reporter port-forward svc/policy-reporter-gui 8081:8080
 ```
 
-Grafana доступна для просмотра состояния стенда без отдельной настройки учетной записи.
-
-Главные переменные находятся в:
-
-```text
-ansible/group_vars/all/common.yml
-ansible/group_vars/all/mirrors.yml
-ansible/roles/*/defaults/main.yml
-```
-
-`group_vars/all/` содержит общие настройки стенда для любой Debian/Ubuntu VM. Файла `ansible/group_vars/all.yml` больше нет: вместо него используется директория `ansible/group_vars/all/`. Ролевые значения по умолчанию лежат рядом с ролями в `defaults/main.yml`.
-
-Для будущих Helm-установок заведены централизованные зеркала в `ansible/group_vars/all/mirrors.yml`. Приоритетный источник для charts - зеркало Яндекса:
-
-```text
-https://mirror.yandex.ru/helm/
-```
-
-Для Redis image Argo CD используется Yandex mirror:
-
-```text
-cr.yandex/mirror/library/redis:8.2.3-alpine
-```
-
-Для Kyverno chart проверено рабочее зеркало Яндекса:
-
-```text
-https://mirror.yandex.ru/helm/kyverno.github.io
-```
-
-Для kube-prometheus-stack используется зеркало Prometheus Community на Яндексе:
-
-```text
-https://mirror.yandex.ru/helm/prometheus-community.github.io
-```
-
-Policy Reporter использует официальный upstream Helm repository:
-
-```text
-https://kyverno.github.io/policy-reporter
-```
+Grafana доступна для просмотра состояния стенда без отдельной настройки учетной
+записи.
 
 ## GitOps И App Of Apps
 
-Argo CD bootstrap выполняется Ansible-ролью `argocd`. После этого Argo CD может сам подтянуть приложения из Git через root `Application`.
+Argo CD bootstrap выполняется Ansible-ролью `argocd`. После этого Argo CD сам
+подтягивает приложения из Git через root `Application`.
 
 Root application смотрит в:
 
@@ -440,19 +372,25 @@ Root application смотрит в:
 argocd_root_application_path: gitops/apps
 ```
 
-По умолчанию root application применяется автоматически и смотрит в этот же репозиторий:
+По умолчанию root application применяется автоматически и смотрит в этот же
+репозиторий и ветку `main`:
 
 ```yaml
 argocd_root_application_repo_url: "https://github.com/babim-negev/test-task-mts-maga.git"
+argocd_root_application_target_revision: main
 ```
 
-Если вы запускаете fork или private mirror, переопределите `argocd_root_application_repo_url` в `ansible/inventory.ini`, group vars или через `--extra-vars`.
+Дочерние Argo CD `Application` manifests в `gitops/apps` тоже закреплены на
+ветку `main` этого публичного репозитория. Это основной сценарий сдачи:
+проверяющий запускает стенд из опубликованного canonical repo, а Argo CD
+синхронизирует проверенное состояние из `main`.
 
-Дочерние `Application` manifests в `gitops/apps/*.yaml` уже смотрят в этот же репозиторий:
+Если вы запускаете fork или private mirror, замените repo URL в двух местах:
 
-```text
-https://github.com/babim-negev/test-task-mts-maga.git
-```
+- `argocd_root_application_repo_url` в `ansible/inventory.ini`, group vars или
+  через `--extra-vars`;
+- `repoURL` в дочерних manifests из `gitops/apps` для приложений, которые
+  читают файлы этого репозитория.
 
 В `gitops/apps` находятся дочерние приложения:
 
@@ -461,16 +399,6 @@ https://github.com/babim-negev/test-task-mts-maga.git
 - `policy-reporter-route` - HTTPRoute для `policy-reporter.kyverno-mvp.local`;
 - `kyverno-policies` - ClusterPolicy manifests из `policies/clusterpolicies`;
 - `kyverno-demo` - валидный demo namespace/workload.
-
-Argo CD после синхронизации должен показывать цепочку:
-
-```text
-root -> kyverno
-root -> policy-reporter
-root -> policy-reporter-route
-root -> kyverno-policies
-root -> kyverno-demo
-```
 
 ## Политики Kyverno
 
@@ -487,11 +415,13 @@ root -> kyverno-demo
 validationFailureAction: Enforce
 ```
 
-Это означает, что невалидные новые pod/deployment manifests будут отклоняться admission webhook.
+Это означает, что невалидные новые pod/deployment manifests будут отклоняться
+admission webhook.
 
 ## Тесты Политик И CI
 
-Локально установите Kyverno CLI `v1.14.4`, чтобы версия совпадала с GitHub Actions, и запустите:
+Локально установите Kyverno CLI `v1.14.4`, чтобы версия совпадала с GitHub
+Actions, и запустите:
 
 ```bash
 kyverno test policies/tests
@@ -504,18 +434,29 @@ kyverno apply policies/clusterpolicies -r demo/resources/good-pod.yaml
 .github/workflows/kyverno-policy-tests.yml
 ```
 
-Он запускается на `push` и `pull_request`, устанавливает Kyverno CLI и выполняет:
+Он запускается на `push` и `pull_request`, устанавливает Kyverno CLI и
+выполняет:
 
 ```bash
 kyverno test policies/tests
 kyverno apply policies/clusterpolicies -r demo/resources/good-pod.yaml
 ```
 
-Если политика сломана или expected outcome не совпадает с fixture, workflow падает и блокирует безопасную раскатку через GitOps.
+Если политика сломана или expected outcome не совпадает с fixture, workflow
+падает.
 
-## Проверка
+Для строгой блокировки раскатки включите protection для ветки `main` в GitHub:
 
-Проверить синтаксис:
+- требовать pull request перед merge;
+- требовать успешный status check `Проверить политики Kyverno`;
+- синхронизировать Argo CD только из защищенной ветки `main`.
+
+При такой схеме сломанная policy не попадает в `main`, а значит Argo CD не
+раскатывает ее в кластер.
+
+## Проверка Документации И Ansible
+
+Проверить синтаксис playbook:
 
 ```bash
 ansible-playbook -i ansible/inventory.example.ini ansible/playbook.yml --syntax-check
@@ -527,93 +468,11 @@ ansible-playbook -i ansible/inventory.example.ini ansible/playbook.yml --syntax-
 ansible-playbook -i ansible/inventory.example.ini ansible/playbook.yml --list-tasks
 ```
 
-Проверить доступность VM:
-
-```bash
-ansible all -i ansible/inventory.ini -m ping
-```
-
-После успешного запуска playbook проверить Kubernetes:
-
-```bash
-ssh debian@192.168.x.x sudo k3s kubectl get nodes -o wide
-```
-
-Для текущей VM:
-
-```bash
-ssh -i ~/.ssh/id_rsa debian@192.168.10.116 'sudo k3s kubectl get nodes -o wide'
-```
-
-Ожидаемый результат:
-
-```text
-kyverno-mvp-verify   Ready    control-plane   ...   v1.36.2+k3s1   192.168.10.116
-```
-
-Встроенный Traefik должен быть отключен:
-
-```bash
-ssh -i ~/.ssh/id_rsa debian@192.168.10.116 'sudo k3s kubectl -n kube-system get deploy traefik'
-```
-
-Ожидаемый результат:
-
-```text
-Error from server (NotFound): deployments.apps "traefik" not found
-```
-
-Проверить Argo CD:
-
-```bash
-ssh -i ~/.ssh/id_rsa debian@192.168.10.116 'sudo k3s kubectl -n argocd get pods -o wide'
-```
-
-Ожидаемый результат: pods Argo CD находятся в состоянии `Running` и `Ready`.
-
-Проверить root Application для App of Apps, если задан `argocd_root_application_repo_url`:
-
-```bash
-ssh debian@192.168.x.x 'sudo k3s kubectl -n argocd get application root'
-```
-
-Проверить Kyverno:
-
-```bash
-ssh debian@192.168.x.x 'sudo k3s kubectl -n kyverno get pods'
-ssh debian@192.168.x.x 'sudo k3s kubectl get clusterpolicies'
-```
-
-Проверить Policy Reporter:
-
-```bash
-ssh debian@192.168.x.x 'sudo k3s kubectl -n policy-reporter get pods,svc'
-```
-
-Проверить admission deny:
-
-```bash
-ssh debian@192.168.x.x 'sudo k3s kubectl create namespace kyverno-demo --dry-run=client -o yaml | sudo k3s kubectl apply -f -'
-ssh debian@192.168.x.x 'sudo k3s kubectl apply -f -' < demo/resources/bad-privileged-pod.yaml
-```
-
-Ожидаемый результат:
-
-```text
-Error from server: admission webhook ... denied the request ... disallow-privileged-containers
-```
-
-Проверить валидный pod:
-
-```bash
-ssh debian@192.168.x.x 'sudo k3s kubectl apply -f -' < demo/resources/good-pod.yaml
-```
-
-Root Application для App of Apps применяется по умолчанию, потому что `argocd_root_application_repo_url` уже указывает на опубликованный репозиторий.
-
 ## Удаление Стенда
 
-Самый надежный способ очистить стенд - удалить тестовую VM целиком. Стенд рассчитан на чистую одноразовую Debian/Ubuntu VM, поэтому пересоздание VM быстрее и безопаснее ручной очистки всех Kubernetes и системных компонентов.
+Самый надежный способ очистить стенд - удалить тестовую VM целиком. Стенд
+рассчитан на чистую одноразовую Debian/Ubuntu VM, поэтому пересоздание VM
+быстрее и безопаснее ручной очистки Kubernetes и системных компонентов.
 
 Если нужно остановить компоненты без удаления VM, выполните на VM:
 
@@ -621,7 +480,8 @@ Root Application для App of Apps применяется по умолчани
 sudo systemctl disable --now k3s
 ```
 
-Для полной ручной очистки VM удалите k3s, kubeconfig и локальные systemd/host-path данные:
+Для полной ручной очистки VM удалите k3s, kubeconfig и локальные systemd/host-path
+данные:
 
 ```bash
 sudo systemctl disable --now k3s || true
@@ -639,12 +499,14 @@ rm -f files/context/config.yaml
 
 ## Диагностика Проблем
 
-Если `python3 -m venv .venv` не работает, установите пакет `python3-venv` на локальной машине.
+Если `python3 -m venv .venv` не работает, установите пакет `python3-venv` на
+локальной машине.
 
-Если `ansible all -i ansible/inventory.ini -m ping` не возвращает `pong`, проверьте:
+Если `ansible all -i ansible/inventory.ini -m ping` не возвращает `pong`,
+проверьте:
 
 - IP в `ansible/inventory.ini`;
 - SSH-пользователя;
 - путь до приватного ключа;
-- что пользователь может выполнять `sudo`;
+- что пользователь может выполнять `sudo -n true`;
 - что VM доступна по сети с локальной машины.

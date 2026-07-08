@@ -2,11 +2,16 @@
 
 Этот каталог используется root `Application` Argo CD в App of Apps pattern.
 
-Дочерние `Application` manifests смотрят в этот же репозиторий:
+Дочерние `Application` manifests смотрят в ветку `main` этого же публичного
+репозитория:
 
 ```text
 https://github.com/babim-negev/test-task-mts-maga.git
 ```
+
+Если стенд запускается из fork или private mirror, нужно заменить `repoURL` в
+дочерних manifests, которые читают файлы этого репозитория, и отдельно
+переопределить root application URL в Ansible.
 
 Ожидаемая цепочка:
 

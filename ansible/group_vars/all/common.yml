@@ -5,8 +5,14 @@
 use_russian_mirrors: true
 
 # Argo CD upstream manifest ссылается на public.ecr.aws Redis image.
-# Для российского стенда по умолчанию используем Yandex mirror.
-argocd_redis_image_override: "cr.yandex/mirror/library/redis:8.2.3-alpine"
+# Yandex mirror на момент проверки отдает amd64 Redis для arm64-ноды, что
+# приводит к exec format error, поэтому mirror используем только на x86_64.
+argocd_redis_image_override_map:
+  x86_64: cr.yandex/mirror/library/redis:8.2.3-alpine
+  amd64: cr.yandex/mirror/library/redis:8.2.3-alpine
+  aarch64: docker.io/library/redis:8.2.3-alpine
+  arm64: docker.io/library/redis:8.2.3-alpine
+argocd_redis_image_override: "{{ argocd_redis_image_override_map.get(ansible_architecture, 'docker.io/library/redis:8.2.3-alpine') }}"
 
 # Первый UI публикуется через HTTPRoute Envoy Gateway.
 argocd_server_insecure: true
@@ -17,6 +23,6 @@ observability_grafana_hostname: grafana.kyverno-mvp.local
 # Policy Reporter публикуется через GitOps HTTPRoute.
 policy_reporter_hostname: policy-reporter.kyverno-mvp.local
 
-# Root Application для App of Apps по умолчанию смотрит в опубликованный GitHub repository.
-# Для fork или private mirror переопределите argocd_root_application_repo_url в inventory/group_vars/extra-vars.
+# Root Application для App of Apps по умолчанию смотрит в main опубликованного GitHub repository.
+# Для fork или private mirror переопределите root repo URL здесь и repoURL дочерних Application manifests в gitops/apps.
 argocd_root_application_path: gitops/apps

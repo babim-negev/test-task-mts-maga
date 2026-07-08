@@ -7,7 +7,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/babim-negev/test-task-mts-maga.git
-    targetRevision: HEAD
+    targetRevision: main
     path: gitops/platform/policy-reporter-route
   destination:
     server: https://kubernetes.default.svc
@@ -18,4 +18,3 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-

@@ -21,7 +21,7 @@
   ansible.builtin.fail:
     msg: >-
       Недостаточно RAM: найдено {{ ansible_facts["memtotal_mb"] }} MB,
-      требуется минимум {{ min_ram_mb }} MB.
+      требуется минимум {{ min_ram_mb }} MB. Для VirtualBox задайте VM минимум 8192 MB RAM.
   when: ansible_facts["memtotal_mb"] | int < min_ram_mb | int
 
 - name: Проверить минимальное количество CPU

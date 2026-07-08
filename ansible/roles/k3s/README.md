@@ -32,6 +32,7 @@ k3s_kubeconfig_path: /etc/rancher/k3s/k3s.yaml
 k3s_local_kubeconfig_enabled: true
 k3s_local_kubeconfig_path: "{{ playbook_dir }}/../files/context/config.yaml"
 k3s_local_kubeconfig_server_host: "{{ ansible_host | default(inventory_hostname) }}"
+k3s_local_kubeconfig_server_url: "https://{{ k3s_local_kubeconfig_server_host }}:6443"
 k3s_disable_components:
   - traefik
 k3s_write_kubeconfig_mode: "0644"
@@ -86,7 +87,13 @@ Kubeconfig находится на server-node в файле:
 files/context/config.yaml
 ```
 
-В локальном файле `server: https://127.0.0.1:6443` автоматически заменяется на `ansible_host` из inventory. Файл предназначен для `kubectl`/Lens/OpenLens и игнорируется git.
+В локальном файле `server: https://127.0.0.1:6443` автоматически заменяется на `k3s_local_kubeconfig_server_url`. Для bridged VM обычно достаточно IP из inventory. Для localhost/NAT/QEMU-сценария используйте `k3s_local_kubeconfig_server_host=127.0.0.1` и поднимите SSH tunnel:
+
+```bash
+ssh -N -L 6443:127.0.0.1:6443 -p 2022 debian@127.0.0.1
+```
+
+Файл предназначен для `kubectl`/Lens/OpenLens и игнорируется git.
 
 Если кластер уже поднят, локальный kubeconfig можно пересоздать без полного bootstrap:
 

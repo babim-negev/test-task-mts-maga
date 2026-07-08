@@ -27,7 +27,7 @@ argocd_server_insecure: true
 argocd_apply_root_application: "{{ argocd_root_application_repo_url | length > 0 }}"
 argocd_root_application_name: root
 argocd_root_application_repo_url: "https://github.com/babim-negev/test-task-mts-maga.git"
-argocd_root_application_target_revision: HEAD
+argocd_root_application_target_revision: main
 argocd_root_application_path: gitops/apps
 ```
 
@@ -54,10 +54,16 @@ argocd_apply_root_application: "{{ argocd_root_application_repo_url | length > 0
 argocd_root_application_repo_url: "https://github.com/babim-negev/test-task-mts-maga.git"
 ```
 
-Для fork или private mirror переопределите repo URL:
+По умолчанию root application и дочерние приложения синхронизируются из
+ветки `main` публичного репозитория сдачи.
+
+Для fork или private mirror нужно заменить repo URL и в root application, и в
+дочерних Application manifests из `gitops/apps`, потому Argo CD читает эти
+файлы уже из Git:
 
 ```yaml
 argocd_root_application_repo_url: "https://github.com/my-org/my-fork.git"
+argocd_root_application_target_revision: main
 argocd_root_application_path: gitops/apps
 ```
 
