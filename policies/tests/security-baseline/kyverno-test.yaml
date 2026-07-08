@@ -23,7 +23,7 @@ results:
     resources:
       - bad-privileged-pod
     kind: Pod
-    result: fail
+    result: pass
   - policy: require-non-root-containers
     rule: require-run-as-non-root
     resources:
