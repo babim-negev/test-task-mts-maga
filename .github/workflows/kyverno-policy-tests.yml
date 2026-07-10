@@ -8,8 +8,8 @@ on:
       - master
 
 jobs:
-  kyverno:
-    name: Проверить политики Kyverno
+  policy-tests:
+    name: Проверить политики и demo manifests
     runs-on: ubuntu-latest
     env:
       KYVERNO_VERSION: v1.14.4
@@ -28,13 +28,30 @@ jobs:
           kyverno version
 
       - name: Запустить тесты политик
-        run: |
-          set -o pipefail
-          kyverno test policies/tests --remove-color | tee kyverno-test.log
-          if grep -q 'Want .* got' kyverno-test.log; then
-            echo 'Kyverno обнаружил несовпадение ожидаемого и фактического результата.' >&2
-            exit 1
-          fi
+        run: kyverno test policies/tests --detailed-results --remove-color
 
       - name: Проверить валидный demo manifest
         run: kyverno apply policies/clusterpolicies -r demo/resources/good-pod.yaml
+
+      - name: Проверить, что небезопасные manifests отклоняются
+        run: |
+          set -euo pipefail
+          for resource in demo/resources/bad-*-pod.yaml; do
+            if kyverno apply policies/clusterpolicies -r "$resource"; then
+              echo "Небезопасный manifest не был отклонен: $resource" >&2
+              exit 1
+            fi
+          done
+
+  ansible-syntax:
+    name: Проверить синтаксис Ansible playbook
+    runs-on: ubuntu-latest
+    steps:
+      - name: Скачать репозиторий
+        uses: actions/checkout@v4
+
+      - name: Установить Ansible
+        run: python3 -m pip install --disable-pip-version-check ansible
+
+      - name: Проверить синтаксис playbook
+        run: ansible-playbook --syntax-check -i 'localhost,' ansible/playbook.yml
