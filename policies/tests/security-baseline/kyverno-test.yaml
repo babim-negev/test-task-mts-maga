@@ -11,6 +11,7 @@ resources:
   - ../../../demo/resources/bad-latest-pod.yaml
   - ../../../demo/resources/bad-no-tag-pod.yaml
   - ../../../demo/resources/bad-no-resources-pod.yaml
+  - ../../../demo/resources/bad-missing-limits-pod.yaml
 results:
   - policy: disallow-privileged-containers
     rule: require-non-privileged-containers
@@ -70,5 +71,11 @@ results:
     rule: require-container-resources
     resources:
       - bad-no-resources-pod
+    kind: Pod
+    result: fail
+  - policy: require-resource-requests-limits
+    rule: require-container-resources
+    resources:
+      - bad-missing-limits-pod
     kind: Pod
     result: fail
