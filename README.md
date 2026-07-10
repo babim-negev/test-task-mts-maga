@@ -182,6 +182,15 @@ monitoring и Policy Reporter постепенно переходят в `Runnin
 | Grafana | `http://grafana.kyverno-mvp.local` | метрики кластера и Kyverno |
 | Policy Reporter | `http://policy-reporter.kyverno-mvp.local` | результаты срабатывания policies |
 
+Для входа в Argo CD используйте логин `admin`. Получите начальный пароль из
+созданного при установке Kubernetes Secret:
+
+```bash
+kubectl -n argocd get secret argocd-initial-admin-secret \
+  -o jsonpath='{.data.password}' | base64 -d
+echo
+```
+
 Grafana настроена для просмотра без ручной настройки аккаунта.
 
 Если DNS/hosts пока не настроены, используйте port-forward:
