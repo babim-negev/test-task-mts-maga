@@ -28,7 +28,13 @@ jobs:
           kyverno version
 
       - name: Запустить тесты политик
-        run: kyverno test policies/tests
+        run: |
+          set -o pipefail
+          kyverno test policies/tests --remove-color | tee kyverno-test.log
+          if grep -q 'Want .* got' kyverno-test.log; then
+            echo 'Kyverno обнаружил несовпадение ожидаемого и фактического результата.' >&2
+            exit 1
+          fi
 
       - name: Проверить валидный demo manifest
         run: kyverno apply policies/clusterpolicies -r demo/resources/good-pod.yaml

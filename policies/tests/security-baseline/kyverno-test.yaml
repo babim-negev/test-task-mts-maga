@@ -1,4 +1,7 @@
-name: security-baseline
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: security-baseline
 policies:
   - ../../clusterpolicies/disallow-privileged-containers.yaml
   - ../../clusterpolicies/require-non-root-containers.yaml
