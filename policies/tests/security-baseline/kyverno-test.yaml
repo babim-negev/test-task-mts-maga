@@ -1,4 +1,7 @@
-name: security-baseline
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: security-baseline
 policies:
   - ../../clusterpolicies/disallow-privileged-containers.yaml
   - ../../clusterpolicies/require-non-root-containers.yaml
@@ -11,6 +14,7 @@ resources:
   - ../../../demo/resources/bad-latest-pod.yaml
   - ../../../demo/resources/bad-no-tag-pod.yaml
   - ../../../demo/resources/bad-no-resources-pod.yaml
+  - ../../../demo/resources/bad-missing-limits-pod.yaml
 results:
   - policy: disallow-privileged-containers
     rule: require-non-privileged-containers
@@ -70,5 +74,11 @@ results:
     rule: require-container-resources
     resources:
       - bad-no-resources-pod
+    kind: Pod
+    result: fail
+  - policy: require-resource-requests-limits
+    rule: require-container-resources
+    resources:
+      - bad-missing-limits-pod
     kind: Pod
     result: fail
