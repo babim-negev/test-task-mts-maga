@@ -9,6 +9,7 @@ policies:
   - ../../clusterpolicies/require-resource-requests-limits.yaml
 resources:
   - ../../../demo/resources/good-pod.yaml
+  - ../../../demo/resources/good-init-container-pod.yaml
   - ../../../demo/resources/bad-privileged-pod.yaml
   - ../../../demo/resources/bad-root-pod.yaml
   - ../../../demo/resources/bad-latest-pod.yaml
@@ -20,6 +21,12 @@ results:
     rule: require-non-privileged-containers
     resources:
       - good-pod
+    kind: Pod
+    result: pass
+  - policy: disallow-privileged-containers
+    rule: require-non-privileged-containers
+    resources:
+      - good-init-container-pod
     kind: Pod
     result: pass
   - policy: disallow-privileged-containers
@@ -37,6 +44,12 @@ results:
   - policy: require-non-root-containers
     rule: require-run-as-non-root
     resources:
+      - good-init-container-pod
+    kind: Pod
+    result: pass
+  - policy: require-non-root-containers
+    rule: require-run-as-non-root
+    resources:
       - bad-root-pod
     kind: Pod
     result: fail
@@ -44,6 +57,12 @@ results:
     rule: require-image-tag
     resources:
       - good-pod
+    kind: Pod
+    result: pass
+  - policy: disallow-latest-image-tag
+    rule: require-image-tag
+    resources:
+      - good-init-container-pod
     kind: Pod
     result: pass
   - policy: disallow-latest-image-tag
@@ -61,6 +80,12 @@ results:
   - policy: disallow-latest-image-tag
     rule: disallow-latest-image-tag
     resources:
+      - good-init-container-pod
+    kind: Pod
+    result: pass
+  - policy: disallow-latest-image-tag
+    rule: disallow-latest-image-tag
+    resources:
       - bad-latest-pod
     kind: Pod
     result: fail
@@ -68,6 +93,12 @@ results:
     rule: require-container-resources
     resources:
       - good-pod
+    kind: Pod
+    result: pass
+  - policy: require-resource-requests-limits
+    rule: require-container-resources
+    resources:
+      - good-init-container-pod
     kind: Pod
     result: pass
   - policy: require-resource-requests-limits
