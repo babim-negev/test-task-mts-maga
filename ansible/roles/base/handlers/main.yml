@@ -1,0 +1,4 @@
+---
+- name: Применить sysctl-настройки
+  ansible.builtin.command: sysctl --system
+  changed_when: true

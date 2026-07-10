@@ -1,0 +1,26 @@
+---
+k3s_version: "v1.36.2+k3s1"
+k3s_arch_binary_map:
+  x86_64: k3s
+  amd64: k3s
+  aarch64: k3s-arm64
+  arm64: k3s-arm64
+k3s_binary_name: "{{ k3s_arch_binary_map.get(ansible_architecture, 'k3s') }}"
+k3s_binary_url: "https://github.com/k3s-io/k3s/releases/download/{{ k3s_version }}/{{ k3s_binary_name }}"
+k3s_binary_versioned_path: "/usr/local/bin/k3s-{{ k3s_version }}"
+k3s_binary_path: /usr/local/bin/k3s
+k3s_force_download: false
+k3s_binary_download_timeout: 60
+k3s_binary_download_retries: 5
+k3s_binary_download_delay: 10
+k3s_config_dir: /etc/rancher/k3s
+k3s_kubeconfig_path: /etc/rancher/k3s/k3s.yaml
+k3s_local_kubeconfig_enabled: true
+k3s_local_kubeconfig_path: "{{ playbook_dir }}/../files/context/config.yaml"
+k3s_local_kubeconfig_server_host: "{{ ansible_host | default(inventory_hostname) }}"
+k3s_local_kubeconfig_server_url: "https://{{ k3s_local_kubeconfig_server_host }}:6443"
+k3s_disable_components:
+  - traefik
+k3s_write_kubeconfig_mode: "0644"
+k3s_service_state: started
+k3s_service_enabled: true

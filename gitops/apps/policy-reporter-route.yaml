@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: policy-reporter-route
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/babim-negev/test-task-mts-maga.git
+    targetRevision: main
+    path: gitops/platform/policy-reporter-route
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: policy-reporter
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

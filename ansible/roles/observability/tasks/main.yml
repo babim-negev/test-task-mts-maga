@@ -1,0 +1,203 @@
+---
+- name: Сформировать values kube-prometheus-stack
+  ansible.builtin.template:
+    src: kube-prometheus-stack-values.yaml.j2
+    dest: "{{ observability_values_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Проверить состояние Helm release kube-prometheus-stack
+  ansible.builtin.command: >-
+    {{ helm_binary_path }} status {{ observability_release_name }}
+    --namespace {{ observability_namespace }}
+  environment:
+    KUBECONFIG: "{{ k3s_kubeconfig_path }}"
+  register: observability_helm_status
+  changed_when: false
+  failed_when: false
+
+- name: Снять залипший pending Helm release kube-prometheus-stack
+  ansible.builtin.command: >-
+    {{ helm_binary_path }} uninstall {{ observability_release_name }}
+    --namespace {{ observability_namespace }}
+    --wait
+    --timeout {{ observability_cleanup_timeout }}
+  environment:
+    KUBECONFIG: "{{ k3s_kubeconfig_path }}"
+  register: observability_helm_pending_uninstall
+  changed_when: observability_helm_pending_uninstall.rc == 0
+  failed_when: false
+  when:
+    - observability_helm_status.rc == 0
+    - observability_helm_status.stdout is search("STATUS: pending-")
+
+- name: Удалить namespace monitoring после неуспешного снятия pending release
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    delete namespace {{ observability_namespace }}
+    --ignore-not-found=true
+    --wait=true
+    --timeout={{ observability_cleanup_timeout }}
+  register: observability_namespace_cleanup
+  changed_when: observability_namespace_cleanup.stdout is search("deleted")
+  when:
+    - observability_helm_status.rc == 0
+    - observability_helm_status.stdout is search("STATUS: pending-")
+    - observability_helm_pending_uninstall.rc is defined
+    - observability_helm_pending_uninstall.rc != 0
+
+- name: Скачать chart kube-prometheus-stack
+  ansible.builtin.command: >-
+    {{ helm_binary_path }} pull {{ observability_chart_name }}
+    --repo {{ observability_chart_repo_url }}
+    --version {{ observability_chart_version }}
+    --destination {{ observability_chart_archive_path | dirname }}
+  register: observability_chart_pull
+  changed_when: observability_chart_pull.stdout is search("Pulled|Downloaded") or observability_chart_pull.rc == 0
+  retries: "{{ observability_chart_download_retries }}"
+  delay: "{{ observability_chart_download_delay }}"
+  until: observability_chart_pull is succeeded
+  async: "{{ observability_chart_download_timeout }}"
+  poll: 5
+
+- name: Установить kube-prometheus-stack
+  ansible.builtin.command: >-
+    {{ helm_binary_path }} upgrade --install {{ observability_release_name }}
+    {{ observability_chart_archive_path }}
+    --namespace {{ observability_namespace }}
+    --create-namespace
+    --values {{ observability_values_path }}
+    --timeout {{ observability_install_timeout }}
+  environment:
+    KUBECONFIG: "{{ k3s_kubeconfig_path }}"
+  register: observability_helm_install
+  changed_when: observability_helm_install.stdout is search("has been installed|has been upgraded")
+
+- name: Получить статус observability pods после Helm install
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ observability_namespace }}
+    get pods -o wide
+  register: observability_pods_after_install
+  changed_when: false
+  failed_when: false
+
+- name: Вывести статус observability pods после Helm install
+  ansible.builtin.debug:
+    var: observability_pods_after_install.stdout_lines
+  when: observability_pods_after_install.stdout | length > 0
+
+- name: Получить последние события monitoring namespace
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ observability_namespace }}
+    get events
+    --sort-by=.lastTimestamp
+  register: observability_events_after_install
+  changed_when: false
+  failed_when: false
+
+- name: Вывести последние события monitoring namespace
+  ansible.builtin.debug:
+    var: observability_events_after_install.stdout_lines
+  when: observability_events_after_install.stdout | length > 0
+
+- name: Получить готовность контейнеров Grafana
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ observability_namespace }}
+    get pods
+    -l app.kubernetes.io/instance={{ observability_release_name }},app.kubernetes.io/name=grafana
+    -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{range .status.containerStatuses[*]}{"  "}{.name}{": ready="}{.ready}{", state="}{.state}{"\n"}{end}{end}'
+  register: observability_grafana_container_readiness
+  changed_when: false
+  failed_when: false
+
+- name: Вывести готовность контейнеров Grafana
+  ansible.builtin.debug:
+    var: observability_grafana_container_readiness.stdout_lines
+  when: observability_grafana_container_readiness.stdout | length > 0
+
+- name: Дождаться готовности Grafana deployment
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ observability_namespace }}
+    rollout status deployment/{{ observability_grafana_service_name }}
+    --timeout={{ observability_rollout_poll_timeout }}
+  register: observability_grafana_rollout
+  changed_when: false
+  retries: "{{ observability_rollout_retries }}"
+  delay: "{{ observability_rollout_delay }}"
+  until: observability_grafana_rollout.rc == 0
+
+- name: Дождаться готовности Prometheus Operator deployment
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ observability_namespace }}
+    rollout status deployment/{{ observability_release_name }}-operator
+    --timeout={{ observability_wait_timeout }}
+  changed_when: false
+
+- name: Дождаться готовности Prometheus statefulset
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ observability_namespace }}
+    rollout status statefulset/prometheus-{{ observability_release_name }}-prometheus
+    --timeout={{ observability_wait_timeout }}
+  changed_when: false
+
+- name: Сформировать HTTPRoute для Grafana
+  ansible.builtin.template:
+    src: grafana-route.yaml.j2
+    dest: "{{ observability_route_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Применить HTTPRoute для Grafana
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    --request-timeout={{ observability_wait_timeout }}
+    apply
+    -f {{ observability_route_path }}
+  register: observability_grafana_route_apply
+  changed_when: observability_grafana_route_apply.stdout is search("created|configured")
+
+- name: Дождаться принятия HTTPRoute для Grafana
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ observability_namespace }}
+    get httproute {{ observability_grafana_route_name }}
+    -o jsonpath='{.status.parents[0].conditions[?(@.type=="Accepted")].status}'
+  register: observability_grafana_route_accepted
+  changed_when: false
+  retries: 60
+  delay: 5
+  until: observability_grafana_route_accepted.stdout == "True"
+
+- name: Получить статус observability pods
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ observability_namespace }}
+    get pods -o wide
+  register: observability_pods
+  changed_when: false
+
+- name: Вывести статус observability pods
+  ansible.builtin.debug:
+    var: observability_pods.stdout_lines
+
+- name: Сообщить hostname Grafana
+  ansible.builtin.debug:
+    msg: "Grafana будет доступна через Envoy Gateway по http://{{ observability_grafana_hostname }} после добавления VM IP в /etc/hosts. Для просмотра включен anonymous Viewer без права редактирования."

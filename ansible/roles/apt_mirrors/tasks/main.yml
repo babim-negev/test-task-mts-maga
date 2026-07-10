@@ -1,0 +1,95 @@
+---
+- name: Пропустить переключение apt-зеркал, если оно отключено
+  ansible.builtin.debug:
+    msg: "use_russian_mirrors=false, текущие apt sources остаются без изменений."
+  when: not use_russian_mirrors | bool
+
+- name: Настроить apt-зеркала Яндекса
+  when: use_russian_mirrors | bool
+  block:
+    - name: Создать директорию для backup apt sources
+      ansible.builtin.file:
+        path: /etc/apt/sources.backup
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Проверить наличие старого файла apt sources
+      ansible.builtin.stat:
+        path: /etc/apt/sources.list
+      register: apt_mirrors_legacy_sources
+
+    - name: Сохранить backup старого файла apt sources
+      ansible.builtin.copy:
+        src: /etc/apt/sources.list
+        dest: /etc/apt/sources.backup/sources.list.bak
+        remote_src: true
+        force: false
+        owner: root
+        group: root
+        mode: "0644"
+      when: apt_mirrors_legacy_sources.stat.exists
+
+    - name: Отключить старый файл apt sources
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list
+        content: |
+          # Управляется Ansible для Kyverno MVP.
+          # Активные репозитории описаны в /etc/apt/sources.list.d/kyverno-mvp-yandex.sources.
+        owner: root
+        group: root
+        mode: "0644"
+      when: apt_mirrors_legacy_sources.stat.exists
+
+    - name: Найти существующие фрагменты apt sources
+      ansible.builtin.find:
+        paths: /etc/apt/sources.list.d
+        patterns:
+          - "*.list"
+          - "*.sources"
+        file_type: file
+      register: apt_mirrors_source_snippets
+
+    - name: Сохранить backup существующих фрагментов apt sources
+      ansible.builtin.copy:
+        src: "{{ item.path }}"
+        dest: "/etc/apt/sources.backup/{{ item.path | basename }}.bak"
+        remote_src: true
+        force: false
+        owner: root
+        group: root
+        mode: "0644"
+      loop: "{{ apt_mirrors_source_snippets.files }}"
+      when: (item.path | basename) != "kyverno-mvp-yandex.sources"
+
+    - name: Отключить существующие фрагменты apt sources
+      ansible.builtin.command:
+        cmd: "mv {{ item.path }} {{ item.path }}.disabled"
+        creates: "{{ item.path }}.disabled"
+        removes: "{{ item.path }}"
+      loop: "{{ apt_mirrors_source_snippets.files }}"
+      when: (item.path | basename) != "kyverno-mvp-yandex.sources"
+
+    - name: Настроить зеркало Яндекса для Debian
+      ansible.builtin.template:
+        src: debian-yandex.sources.j2
+        dest: /etc/apt/sources.list.d/kyverno-mvp-yandex.sources
+        owner: root
+        group: root
+        mode: "0644"
+      when: ansible_facts["distribution"] == "Debian"
+
+    - name: Настроить зеркало Яндекса для Ubuntu
+      ansible.builtin.template:
+        src: ubuntu-yandex.sources.j2
+        dest: /etc/apt/sources.list.d/kyverno-mvp-yandex.sources
+        owner: root
+        group: root
+        mode: "0644"
+      when: ansible_facts["distribution"] == "Ubuntu"
+
+    - name: Обновить apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 0

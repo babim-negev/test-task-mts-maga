@@ -1,0 +1,82 @@
+---
+fullnameOverride: {{ observability_release_name }}
+
+alertmanager:
+  enabled: false
+
+grafana:
+  enabled: true
+  adminUser: {{ observability_grafana_admin_user }}
+  adminPassword: {{ observability_grafana_admin_password }}
+  defaultDashboardsTimezone: browser
+  grafana.ini:
+    auth:
+      disable_login_form: {{ observability_grafana_disable_login_form | bool | lower }}
+    auth.anonymous:
+      enabled: {{ observability_grafana_anonymous_enabled | bool | lower }}
+      org_name: {{ observability_grafana_anonymous_org_name }}
+      org_role: {{ observability_grafana_anonymous_org_role }}
+    users:
+      viewers_can_edit: {{ observability_grafana_viewers_can_edit | bool | lower }}
+  service:
+    type: ClusterIP
+    port: {{ observability_grafana_service_port }}
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      cpu: {{ observability_grafana_requests_cpu }}
+      memory: {{ observability_grafana_requests_memory }}
+    limits:
+      cpu: {{ observability_grafana_limits_cpu }}
+      memory: {{ observability_grafana_limits_memory }}
+
+prometheus:
+  enabled: true
+  prometheusSpec:
+    replicas: {{ observability_prometheus_replicas }}
+    retention: {{ observability_prometheus_retention }}
+    retentionSize: {{ observability_prometheus_retention_size }}
+    enableAdminAPI: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    resources:
+      requests:
+        cpu: {{ observability_prometheus_requests_cpu }}
+        memory: {{ observability_prometheus_requests_memory }}
+      limits:
+        cpu: {{ observability_prometheus_limits_cpu }}
+        memory: {{ observability_prometheus_limits_memory }}
+    storageSpec: {}
+
+prometheusOperator:
+  enabled: true
+  resources:
+    requests:
+      cpu: {{ observability_operator_requests_cpu }}
+      memory: {{ observability_operator_requests_memory }}
+    limits:
+      cpu: {{ observability_operator_limits_cpu }}
+      memory: {{ observability_operator_limits_memory }}
+
+kubeEtcd:
+  enabled: false
+
+kubeControllerManager:
+  enabled: false
+
+kubeScheduler:
+  enabled: false
+
+kubeProxy:
+  enabled: false
+
+defaultRules:
+  create: true
+  rules:
+    etcd: false
+    kubeControllerManager: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeProxy: false

@@ -1,0 +1,39 @@
+---
+- name: Установить базовые пакеты
+  ansible.builtin.apt:
+    name: "{{ base_packages }}"
+    state: present
+    update_cache: true
+
+- name: Включить и запустить SSH-сервис
+  ansible.builtin.service:
+    name: ssh
+    state: started
+    enabled: true
+
+- name: Загрузить модули ядра для сети k3s
+  ansible.builtin.command: "modprobe {{ item }}"
+  changed_when: false
+  loop: "{{ kernel_modules }}"
+
+- name: Сохранить модули ядра для загрузки после reboot
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/kyverno-mvp-k3s.conf
+    content: |
+      br_netfilter
+      overlay
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Записать sysctl-настройки для сети k3s
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-kyverno-mvp-k3s.conf
+    content: |
+      {% for key, value in sysctl_settings.items() %}
+      {{ key }} = {{ value }}
+      {% endfor %}
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Применить sysctl-настройки

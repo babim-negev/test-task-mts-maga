@@ -1,0 +1,47 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-non-root-containers
+  annotations:
+    policies.kyverno.io/title: Require Non Root Containers
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: high
+    pod-policies.kyverno.io/autogen-controllers: none
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-run-as-non-root
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - argocd
+                - kyverno
+                - monitoring
+                - envoy-gateway-system
+                - policy-reporter
+      validate:
+        message: "Pods and containers must explicitly run as non-root."
+        pattern:
+          spec:
+            securityContext:
+              runAsNonRoot: true
+            =(initContainers):
+              - securityContext:
+                  runAsNonRoot: true
+                  =(runAsUser): ">0"
+            containers:
+              - securityContext:
+                  runAsNonRoot: true
+                  =(runAsUser): ">0"
+            =(ephemeralContainers):
+              - securityContext:
+                  runAsNonRoot: true
+                  =(runAsUser): ">0"

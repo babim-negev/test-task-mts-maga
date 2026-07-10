@@ -1,0 +1,12 @@
+.DS_Store
+.venv/
+ansible/.venv/
+ansible/inventory.ini
+ansible/inventory.*.ini
+ansible/inventory.example copy.ini
+files/context/
+Тестовые задачи_по SRE.pdf
+__pycache__/
+*.py[cod]
+*.retry
+tmp/

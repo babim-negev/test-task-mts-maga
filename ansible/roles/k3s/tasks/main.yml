@@ -1,0 +1,148 @@
+---
+- name: Создать директорию конфигурации k3s
+  ansible.builtin.file:
+    path: "{{ k3s_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Настроить k3s server
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ k3s_config_dir }}/config.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Перезапустить k3s
+
+- name: Проверить наличие закрепленного k3s binary
+  ansible.builtin.stat:
+    path: "{{ k3s_binary_versioned_path }}"
+  register: k3s_binary_stat
+
+- name: Скачать закрепленный бинарный файл k3s
+  ansible.builtin.get_url:
+    url: "{{ k3s_binary_url }}"
+    dest: "{{ k3s_binary_versioned_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+    force: false
+    timeout: "{{ k3s_binary_download_timeout }}"
+  register: k3s_binary_download
+  retries: "{{ k3s_binary_download_retries }}"
+  delay: "{{ k3s_binary_download_delay }}"
+  until: k3s_binary_download is succeeded
+  notify: Перезапустить k3s
+  when: not k3s_binary_stat.stat.exists or k3s_force_download | bool
+
+- name: Направить символьную ссылку k3s на закрепленную версию
+  ansible.builtin.file:
+    src: "{{ k3s_binary_versioned_path }}"
+    dest: "{{ k3s_binary_path }}"
+    state: link
+    force: true
+  notify: Перезапустить k3s
+
+- name: Установить systemd unit для k3s
+  ansible.builtin.template:
+    src: k3s.service.j2
+    dest: /etc/systemd/system/k3s.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Перечитать systemd
+    - Перезапустить k3s
+
+- name: Выполнить handlers k3s перед проверками сервиса
+  ansible.builtin.meta: flush_handlers
+
+- name: Включить и запустить k3s
+  ansible.builtin.systemd:
+    name: k3s
+    state: "{{ k3s_service_state }}"
+    enabled: "{{ k3s_service_enabled }}"
+    daemon_reload: true
+
+- name: Дождаться создания kubeconfig
+  ansible.builtin.wait_for:
+    path: "{{ k3s_kubeconfig_path }}"
+    timeout: 180
+  tags:
+    - k3s_kubeconfig
+
+- name: Прочитать kubeconfig k3s с VM
+  ansible.builtin.slurp:
+    src: "{{ k3s_kubeconfig_path }}"
+  register: k3s_remote_kubeconfig
+  when: k3s_local_kubeconfig_enabled | bool
+  tags:
+    - k3s_kubeconfig
+
+- name: Создать локальную директорию для kubeconfig
+  ansible.builtin.file:
+    path: "{{ k3s_local_kubeconfig_path | dirname }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: false
+  when: k3s_local_kubeconfig_enabled | bool
+  tags:
+    - k3s_kubeconfig
+
+- name: Сохранить локальный kubeconfig с адресом API из inventory
+  ansible.builtin.copy:
+    dest: "{{ k3s_local_kubeconfig_path }}"
+    content: >-
+      {{
+        k3s_remote_kubeconfig.content
+        | b64decode
+        | replace('https://127.0.0.1:6443', k3s_local_kubeconfig_server_url)
+        | replace('https://localhost:6443', k3s_local_kubeconfig_server_url)
+      }}
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+  when: k3s_local_kubeconfig_enabled | bool
+  tags:
+    - k3s_kubeconfig
+
+- name: Дождаться ответа Kubernetes API
+  ansible.builtin.command: "{{ k3s_binary_path }} kubectl --kubeconfig {{ k3s_kubeconfig_path }} get --raw=/readyz"
+  register: k3s_readyz
+  changed_when: false
+  retries: 30
+  delay: 5
+  until: k3s_readyz.rc == 0 and k3s_readyz.stdout == "ok"
+
+- name: Дождаться состояния Ready у k3s node
+  ansible.builtin.command: "{{ k3s_binary_path }} kubectl --kubeconfig {{ k3s_kubeconfig_path }} wait --for=condition=Ready node --all --timeout=180s"
+  changed_when: false
+
+- name: Создать символьную ссылку kubectl на бинарный файл k3s
+  ansible.builtin.file:
+    src: "{{ k3s_binary_path }}"
+    dest: /usr/local/bin/kubectl
+    state: link
+    force: true
+
+- name: Проверить, что встроенный Traefik отключен
+  ansible.builtin.command: "{{ k3s_binary_path }} kubectl --kubeconfig {{ k3s_kubeconfig_path }} -n kube-system get deploy traefik"
+  register: k3s_traefik_check
+  changed_when: false
+  failed_when: k3s_traefik_check.rc == 0
+
+- name: Сообщить решение по ServiceLB
+  ansible.builtin.debug:
+    msg: "ServiceLB намеренно оставлен включенным; он будет проверен, когда Envoy Gateway опубликует LoadBalancer-сервис."
+
+- name: Получить статус k3s node
+  ansible.builtin.command: "{{ k3s_binary_path }} kubectl --kubeconfig {{ k3s_kubeconfig_path }} get nodes -o wide"
+  register: k3s_nodes
+  changed_when: false
+
+- name: Вывести статус k3s node
+  ansible.builtin.debug:
+    var: k3s_nodes.stdout_lines

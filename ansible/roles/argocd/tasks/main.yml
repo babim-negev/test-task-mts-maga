@@ -1,0 +1,222 @@
+---
+- name: Проверить наличие namespace Argo CD
+  ansible.builtin.command: "{{ k3s_binary_path }} kubectl --kubeconfig {{ k3s_kubeconfig_path }} get namespace {{ argocd_namespace }}"
+  register: argocd_namespace_check
+  changed_when: false
+  failed_when: false
+
+- name: Создать namespace Argo CD
+  ansible.builtin.command: "{{ k3s_binary_path }} kubectl --kubeconfig {{ k3s_kubeconfig_path }} create namespace {{ argocd_namespace }}"
+  when: argocd_namespace_check.rc != 0
+
+- name: Проверить, установлен ли Argo CD
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ argocd_namespace }}
+    get deployment argocd-server
+  register: argocd_install_check
+  changed_when: false
+  failed_when: false
+
+- name: Сообщить, какой Redis image будет использовать Argo CD
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        'Redis image Argo CD будет заменен на ' ~ argocd_redis_image_override
+        if argocd_redis_image_override | length > 0
+        else 'Redis image override не задан; будет использован image из официального manifest Argo CD.'
+      }}
+
+- name: Скачать закрепленный manifest Argo CD
+  ansible.builtin.get_url:
+    url: "{{ argocd_install_manifest_url }}"
+    dest: "{{ argocd_install_manifest_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    force: true
+    timeout: "{{ argocd_install_manifest_timeout }}"
+  register: argocd_install_manifest_download
+  retries: "{{ argocd_install_manifest_retries }}"
+  delay: "{{ argocd_install_manifest_delay }}"
+  until: argocd_install_manifest_download is succeeded
+  when: argocd_install_check.rc != 0 or argocd_force_apply | bool
+
+- name: Заменить Redis image в manifest Argo CD до применения
+  ansible.builtin.replace:
+    path: "{{ argocd_install_manifest_path }}"
+    regexp: "{{ argocd_redis_upstream_image_pattern }}[^\\s\"']+"
+    replace: "{{ argocd_redis_image_override }}"
+  when:
+    - argocd_redis_image_override | length > 0
+    - argocd_install_check.rc != 0 or argocd_force_apply | bool
+
+- name: Проверить, что manifest Argo CD использует зеркальный Redis image
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -q
+      - "{{ argocd_redis_upstream_registry }}"
+      - "{{ argocd_install_manifest_path }}"
+  register: argocd_manifest_public_ecr_check
+  changed_when: false
+  failed_when: argocd_manifest_public_ecr_check.rc == 0
+  when:
+    - argocd_redis_image_override | length > 0
+    - argocd_install_check.rc != 0 or argocd_force_apply | bool
+
+- name: Установить Argo CD из подготовленного manifest
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    --request-timeout={{ argocd_install_manifest_timeout }}s
+    apply
+    --server-side
+    --force-conflicts
+    -n {{ argocd_namespace }}
+    -f {{ argocd_install_manifest_path }}
+  register: argocd_apply
+  changed_when: argocd_apply.stdout is search("created|configured")
+  when: argocd_install_check.rc != 0 or argocd_force_apply | bool
+
+- name: Проверить текущий Redis image в Argo CD
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ argocd_namespace }}
+    get deployment argocd-redis
+    -o jsonpath='{.spec.template.spec.containers[?(@.name=="redis")].image}'
+  register: argocd_current_redis_image
+  changed_when: false
+  failed_when: false
+
+- name: Закрепить Redis image Argo CD на доступном registry
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ argocd_namespace }}
+    set image deployment/argocd-redis
+    redis={{ argocd_redis_image_override }}
+  register: argocd_redis_image
+  changed_when: argocd_redis_image.stdout is search("image updated")
+  when:
+    - argocd_redis_image_override | length > 0
+    - argocd_current_redis_image.stdout != argocd_redis_image_override
+
+- name: Проверить insecure mode Argo CD server
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ argocd_namespace }}
+    get configmap argocd-cmd-params-cm
+    -o jsonpath='{.data.server\.insecure}'
+  register: argocd_current_server_insecure
+  changed_when: false
+  failed_when: false
+  when: argocd_server_insecure | bool
+
+- name: Включить insecure mode Argo CD server для HTTP Gateway
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ argocd_namespace }}
+    patch configmap argocd-cmd-params-cm
+    --type merge
+    -p '{"data":{"server.insecure":"true"}}'
+  register: argocd_server_insecure_patch
+  changed_when: argocd_server_insecure_patch.stdout is search("patched")
+  when:
+    - argocd_server_insecure | bool
+    - argocd_current_server_insecure.stdout != "true"
+
+- name: Перезапустить Argo CD server после включения insecure mode
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ argocd_namespace }}
+    rollout restart deployment/argocd-server
+  register: argocd_server_insecure_restart
+  changed_when: argocd_server_insecure_restart.stdout is search("restarted")
+  when:
+    - argocd_server_insecure | bool
+    - argocd_current_server_insecure.stdout != "true"
+
+- name: Получить список Argo CD deployments
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ argocd_namespace }}
+    get deployment -o name
+  register: argocd_deployments
+  changed_when: false
+
+- name: Дождаться rollout Argo CD deployments
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ argocd_namespace }}
+    rollout status {{ item }}
+    --timeout={{ argocd_rollout_timeout }}
+  loop: "{{ argocd_deployments.stdout_lines }}"
+  changed_when: false
+
+- name: Получить список Argo CD statefulsets
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ argocd_namespace }}
+    get statefulset -o name
+  register: argocd_statefulsets
+  changed_when: false
+
+- name: Дождаться rollout Argo CD statefulsets
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ argocd_namespace }}
+    rollout status {{ item }}
+    --timeout={{ argocd_rollout_timeout }}
+  loop: "{{ argocd_statefulsets.stdout_lines }}"
+  changed_when: false
+
+- name: Проверить repo URL для root application
+  ansible.builtin.fail:
+    msg: "argocd_apply_root_application=true, но argocd_root_application_repo_url не задан."
+  when:
+    - argocd_apply_root_application | bool
+    - argocd_root_application_repo_url | length == 0
+
+- name: Применить root application для App of Apps
+  ansible.builtin.template:
+    src: root-application.yaml.j2
+    dest: /tmp/kyverno-mvp-argocd-root-application.yaml
+    owner: root
+    group: root
+    mode: "0644"
+  when: argocd_apply_root_application | bool
+  register: argocd_root_application_manifest
+
+- name: Создать root application в Argo CD
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    --request-timeout={{ argocd_install_manifest_timeout }}s
+    apply
+    -f /tmp/kyverno-mvp-argocd-root-application.yaml
+  register: argocd_root_application_apply
+  changed_when: argocd_root_application_apply.stdout is search("created|configured")
+  when: argocd_apply_root_application | bool
+
+- name: Получить статус Argo CD pods
+  ansible.builtin.command: >-
+    {{ k3s_binary_path }} kubectl
+    --kubeconfig {{ k3s_kubeconfig_path }}
+    -n {{ argocd_namespace }}
+    get pods -o wide
+  register: argocd_pods
+  changed_when: false
+
+- name: Вывести статус Argo CD pods
+  ansible.builtin.debug:
+    var: argocd_pods.stdout_lines

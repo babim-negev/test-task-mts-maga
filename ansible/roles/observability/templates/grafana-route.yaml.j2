@@ -1,0 +1,56 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ observability_grafana_gui_service_name }}
+  namespace: {{ observability_namespace }}
+  labels:
+    app.kubernetes.io/name: grafana-gui
+    app.kubernetes.io/part-of: kube-prometheus-stack
+    kyverno-mvp.local/gui: "true"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ observability_release_name }}
+    app.kubernetes.io/name: grafana
+  ports:
+    - name: http-web
+      port: {{ observability_grafana_service_port }}
+      protocol: TCP
+      targetPort: grafana
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ observability_prometheus_gui_service_name }}
+  namespace: {{ observability_namespace }}
+  labels:
+    app.kubernetes.io/name: prometheus-gui
+    app.kubernetes.io/part-of: kube-prometheus-stack
+    kyverno-mvp.local/gui: "true"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: prometheus
+    operator.prometheus.io/name: {{ observability_release_name }}-prometheus
+  ports:
+    - name: http-web
+      port: {{ observability_prometheus_gui_service_port }}
+      protocol: TCP
+      targetPort: 9090
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ observability_grafana_route_name }}
+  namespace: {{ observability_namespace }}
+spec:
+  parentRefs:
+    - name: {{ envoy_gateway_name }}
+      namespace: {{ envoy_gateway_namespace }}
+  hostnames:
+    - {{ observability_grafana_hostname }}
+  rules:
+    - backendRefs:
+        - name: {{ observability_grafana_gui_service_name }}
+          port: {{ observability_grafana_service_port }}
