@@ -36,6 +36,3 @@ spec:
                   requests:
                     cpu: "?*"
                     memory: "?*"
-                  limits:
-                    cpu: "?*"
-                    memory: "?*"
