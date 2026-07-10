@@ -24,13 +24,15 @@
   post_tasks:
     - name: Показать записи для /etc/hosts на машине проверяющего
       ansible.builtin.debug:
-        msg:
-          - "Добавьте эти записи в /etc/hosts на машине, с которой открываете UI:"
-          - "{{ ansible_host | default(inventory_hostname) }} {{ envoy_gateway_argocd_hostname }}"
-          - "{{ ansible_host | default(inventory_hostname) }} {{ observability_grafana_hostname }}"
-          - "{{ ansible_host | default(inventory_hostname) }} {{ policy_reporter_hostname }}"
-          - "UI будут доступны по адресам:"
-          - "http://{{ envoy_gateway_argocd_hostname }}"
-          - "http://{{ observability_grafana_hostname }}"
-          - "http://{{ policy_reporter_hostname }}"
-          - "Kubeconfig для проверки кластера: files/context/config.yaml"
+        msg: |
+          Добавьте эти записи в /etc/hosts на машине, с которой открываете UI:
+          {{ ansible_host | default(inventory_hostname) }} {{ envoy_gateway_argocd_hostname }}
+          {{ ansible_host | default(inventory_hostname) }} {{ observability_grafana_hostname }}
+          {{ ansible_host | default(inventory_hostname) }} {{ policy_reporter_hostname }}
+
+          UI будут доступны по адресам:
+          http://{{ envoy_gateway_argocd_hostname }}
+          http://{{ observability_grafana_hostname }}
+          http://{{ policy_reporter_hostname }}
+
+          Kubeconfig для проверки кластера: files/context/config.yaml
