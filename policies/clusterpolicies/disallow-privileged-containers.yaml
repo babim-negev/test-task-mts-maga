@@ -34,9 +34,6 @@ spec:
             =(initContainers):
               - =(securityContext):
                   =(privileged): false
-            containers:
-              - =(securityContext):
-                  =(privileged): false
             =(ephemeralContainers):
               - =(securityContext):
                   =(privileged): false
