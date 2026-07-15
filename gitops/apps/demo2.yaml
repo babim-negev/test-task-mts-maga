@@ -13,7 +13,7 @@ spec:
       recurse: true
   destination:
     server: https://kubernetes.default.svc
-    namespace: kyverno-demo
+    namespace: kyverno-demo2
   syncPolicy:
     automated:
       prune: true
