@@ -30,7 +30,7 @@
   failed_when: false
   when:
     - observability_helm_status.rc == 0
-    - observability_helm_status.stdout is search("STATUS: pending-")
+    - 'observability_helm_status.stdout is search("STATUS: pending-")'
 
 - name: Удалить namespace monitoring после неуспешного снятия pending release
   ansible.builtin.command: >-
@@ -44,7 +44,7 @@
   changed_when: observability_namespace_cleanup.stdout is search("deleted")
   when:
     - observability_helm_status.rc == 0
-    - observability_helm_status.stdout is search("STATUS: pending-")
+    - 'observability_helm_status.stdout is search("STATUS: pending-")'
     - observability_helm_pending_uninstall.rc is defined
     - observability_helm_pending_uninstall.rc != 0
 
