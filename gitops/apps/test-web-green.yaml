@@ -1,19 +1,19 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: kyverno-demo2
+  name: test-web-green
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: https://github.com/babim-negev/test-task-mts-maga.git
     targetRevision: main
-    path: demo/gitops
+    path: demo/test-web-green
     directory:
       recurse: true
   destination:
     server: https://kubernetes.default.svc
-    namespace: kyverno-demo2
+    namespace: kyverno-demo
   syncPolicy:
     automated:
       prune: true
