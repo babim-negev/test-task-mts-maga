@@ -21,3 +21,8 @@ https://github.com/babim-negev/test-task-mts-maga.git
 - `policy-reporter-route` создает service alias `policy-reporter-gui` и публикует Policy Reporter UI через Envoy Gateway;
 - `kyverno-policies` применяет политики из `policies/clusterpolicies`;
 - `kyverno-demo` применяет только валидные demo resources.
+- `test-web-blue` и `test-web-green` разворачивают независимые тестовые веб-службы в namespace `kyverno-demo`.
+
+`kyverno-demo` является единственным владельцем manifest `Namespace/kyverno-demo`.
+Тестовые приложения создают только свои `Deployment` и `Service`, поэтому не
+конфликтуют друг с другом или с основной demo.
